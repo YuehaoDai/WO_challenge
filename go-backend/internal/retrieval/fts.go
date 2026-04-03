@@ -141,7 +141,17 @@ func buildFTSQuery(query string) string {
 		if len(w) < 2 || stopWords[lower] {
 			continue
 		}
-		terms = append(terms, w)
+		cleaned := strings.Map(func(r rune) rune {
+			if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+				return r
+			}
+			return ' '
+		}, w)
+		for _, part := range strings.Fields(cleaned) {
+			if len(part) >= 2 && !stopWords[strings.ToLower(part)] {
+				terms = append(terms, part)
+			}
+		}
 	}
 	if len(terms) == 0 {
 		return query

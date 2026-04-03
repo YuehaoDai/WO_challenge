@@ -78,7 +78,6 @@ func (h *HybridRetriever) Search(ctx context.Context, query string, ftsTopK, den
 			reranked = append(reranked, orig)
 		}
 	}
-
 	return reranked, ftsCount, denseCount, rrfCount, len(reranked), nil
 }
 
