@@ -6,6 +6,7 @@ services:
       dockerfile: Dockerfile.ingest
     volumes:
       - ./data:/app/data
+      - model-cache:/root/.cache
     environment:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
       - DB_PATH=/app/data/processed/app.db

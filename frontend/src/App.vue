@@ -5,11 +5,7 @@
     <aside class="nav-rail">
       <div class="nav-top">
         <div class="nav-logo" title="William O'Neil + Co.">
-          <svg class="logo-icon" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="40" rx="8" fill="url(#wo-grad)"/>
-            <text x="20" y="27" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif" font-size="18" font-weight="800" fill="#fff" letter-spacing="-0.5">WO</text>
-            <defs><linearGradient id="wo-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#1e3a5f"/><stop offset="100%" stop-color="#2563eb"/></linearGradient></defs>
-          </svg>
+          <img class="logo-icon" src="./assets/logo.jpeg" alt="William O'Neil + Co." />
         </div>
         <button class="nav-tab" :class="{ active: activeTab === 'chat' }" @click="activeTab = 'chat'" :title="t('chat')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
@@ -1056,7 +1052,7 @@ button, input, textarea, select { color: inherit; font: inherit; }
 }
 .nav-top, .nav-bottom { display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .nav-logo { margin-bottom: 16px; cursor: default; }
-.logo-icon { display: block; width: 36px; height: 36px; }
+.logo-icon { display: block; width: 40px; height: 40px; border-radius: 8px; object-fit: cover; }
 
 .nav-tab {
   display: flex; flex-direction: column; align-items: center; gap: 3px;
