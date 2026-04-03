@@ -144,34 +144,73 @@
         </div>
 
         <!-- Report content -->
-        <div v-else class="report-content">
-          <button class="back-btn" @click="activeReport = null">← {{ t('backToTemplates') }}</button>
-          <h2 class="report-heading">{{ activeReportTitle }}</h2>
+        <div v-else class="report-content" ref="reportContentRef">
+          <div class="report-toolbar">
+            <button class="back-btn" @click="activeReport = null">← {{ t('backToTemplates') }}</button>
+            <button v-if="!reportLoading && reportText" class="download-btn" @click="downloadReport">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              {{ t('download') }}
+            </button>
+          </div>
 
-          <!-- Metric cards -->
-          <div v-if="reportMetrics.length" class="metric-cards">
-            <div v-for="mc in reportMetrics" :key="mc.label" class="metric-card glass-card">
-              <span class="mc-value">{{ mc.value }}</span>
-              <span class="mc-label">{{ mc.label }}</span>
-              <span v-if="mc.change" class="mc-change" :class="mc.change > 0 ? 'up' : 'down'">
-                {{ mc.change > 0 ? '+' : '' }}{{ mc.change.toFixed(1) }}%
-              </span>
+          <div class="report-body" ref="reportBodyRef">
+            <h2 class="report-heading">{{ activeReportTitle }}</h2>
+            <p class="report-date">AAPL · SEC 10-K · FY2020–2025 · {{ new Date().toLocaleDateString() }}</p>
+
+            <!-- KPI cards -->
+            <div v-if="reportMetrics.length" class="metric-cards">
+              <div v-for="mc in reportMetrics" :key="mc.label" class="metric-card glass-card">
+                <span class="mc-value">{{ mc.value }}</span>
+                <span class="mc-label">{{ mc.label }}</span>
+                <span v-if="mc.change" class="mc-change" :class="mc.change > 0 ? 'up' : 'down'">
+                  {{ mc.change > 0 ? '+' : '' }}{{ mc.change.toFixed(1) }}%
+                </span>
+              </div>
             </div>
-          </div>
 
-          <!-- Report charts -->
-          <div v-if="reportChartData" class="report-chart-section glass-card">
-            <div class="report-chart" ref="reportChartRef"></div>
-          </div>
+            <!-- LLM analysis -->
+            <div v-if="reportText" class="report-section">
+              <div class="markdown-body" v-html="renderMd(reportText)"></div>
+            </div>
 
-          <!-- Report text -->
-          <div v-if="reportText" class="report-text glass-card">
-            <div class="markdown-body" v-html="renderMd(reportText)"></div>
-          </div>
+            <!-- Chart inline in report -->
+            <div v-if="reportChartData" class="report-section">
+              <h3 class="section-heading">{{ t('trendChart') }}</h3>
+              <div class="report-chart-wrap glass-card">
+                <div class="report-chart" ref="reportChartRef"></div>
+              </div>
+            </div>
 
-          <div v-if="reportLoading" class="report-loading">
-            <div class="typing-dots"><span></span><span></span><span></span></div>
-            <span>{{ t('generatingReport') }}</span>
+            <!-- Trend data table -->
+            <div v-if="reportChartData" class="report-section">
+              <h3 class="section-heading">{{ t('trendTable') }}</h3>
+              <div class="report-table-wrap glass-card">
+                <table class="trend-table">
+                  <thead>
+                    <tr>
+                      <th>{{ t('fiscalYear') }}</th>
+                      <th v-for="td in reportChartData" :key="td.metric">{{ fmtMetric(td.metric) }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(_, yi) in reportChartData[0].data" :key="yi">
+                      <td>FY{{ reportChartData[0].data[yi].fiscal_year }}</td>
+                      <td v-for="td in reportChartData" :key="td.metric + yi">
+                        {{ fmtVal(td.data[yi].value, td.unit) }}
+                        <span v-if="td.data[yi].yoy_pct != null" class="table-pct" :class="td.data[yi].yoy_pct! > 0 ? 'up' : 'down'">
+                          {{ td.data[yi].yoy_pct! > 0 ? '+' : '' }}{{ td.data[yi].yoy_pct!.toFixed(1) }}%
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div v-if="reportLoading" class="report-loading">
+              <div class="typing-dots"><span></span><span></span><span></span></div>
+              <span>{{ t('generatingReport') }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -203,6 +242,7 @@ const i18n: Record<Locale, Record<string, string>> = {
     cf_high: 'High', cf_medium: 'Medium', cf_low: 'Low',
     reportTitle: 'Analysis Reports', reportDesc: 'Generate structured reports powered by RAG + financial data.',
     backToTemplates: 'Back', generatingReport: 'Generating report...',
+    download: 'Download', trendChart: 'Financial Trends', trendTable: 'Detailed Data', fiscalYear: 'Fiscal Year',
   },
   zh: {
     chat: '对话', report: '报告', newChat: '新对话', systemReady: '在线', connecting: '连接中',
@@ -214,6 +254,7 @@ const i18n: Record<Locale, Record<string, string>> = {
     cf_high: '高置信', cf_medium: '中置信', cf_low: '低置信',
     reportTitle: '分析报告', reportDesc: '基于 RAG + 结构化金融数据生成专业分析报告。',
     backToTemplates: '返回', generatingReport: '正在生成报告...',
+    download: '下载报告', trendChart: '财务趋势', trendTable: '详细数据', fiscalYear: '财政年度',
   },
 }
 function t(k: string) { return i18n[locale.value][k] ?? k }
@@ -473,6 +514,8 @@ const reportText = ref('')
 const reportMetrics = ref<{ label: string; value: string; change?: number }[]>([])
 const reportChartData = ref<TrendsResponse[] | null>(null)
 const reportChartRef = ref<HTMLElement | null>(null)
+const reportContentRef = ref<HTMLElement | null>(null)
+const reportBodyRef = ref<HTMLElement | null>(null)
 let reportChartInstance: echarts.ECharts | null = null
 
 const activeReportTitle = computed(() => {
@@ -518,8 +561,11 @@ async function generateReport(id: string) {
   if (!cfg) return
 
   try {
-    const trendPromises = cfg.metrics.map(m => getTrends(m).catch(() => null))
-    const trends = await Promise.all(trendPromises)
+    const [trends, resp] = await Promise.all([
+      Promise.all(cfg.metrics.map(m => getTrends(m).catch(() => null))),
+      ask({ question: cfg.question, lang: locale.value }),
+    ])
+
     const validTrends = trends.filter(Boolean) as TrendsResponse[]
     reportChartData.value = validTrends.length ? validTrends : null
 
@@ -533,12 +579,9 @@ async function generateReport(id: string) {
       }
     })
 
+    reportText.value = resp.answer
     await nextTick()
     renderReportChart()
-
-    const question = cfg.question
-    const resp = await ask({ question, lang: locale.value })
-    reportText.value = resp.answer
   } catch (e: any) {
     reportText.value = `Error generating report: ${e.message}`
   } finally {
@@ -575,6 +618,98 @@ function renderReportChart() {
 }
 
 watch(reportChartData, () => { nextTick(() => renderReportChart()) })
+
+function downloadReport() {
+  const title = activeReportTitle.value
+  const date = new Date().toLocaleDateString()
+  const chartImg = reportChartInstance ? reportChartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' }) : ''
+
+  let tableHtml = ''
+  if (reportChartData.value?.length) {
+    const allData = reportChartData.value
+    const headers = allData.map(td => `<th>${fmtMetric(td.metric)}</th>`).join('')
+    const rows = allData[0].data.map((_, yi) => {
+      const cells = allData.map(td => {
+        const d = td.data[yi]
+        const pct = d.yoy_pct != null ? ` <span style="color:${d.yoy_pct > 0 ? '#16a34a' : '#dc2626'};font-size:12px">(${d.yoy_pct > 0 ? '+' : ''}${d.yoy_pct.toFixed(1)}%)</span>` : ''
+        return `<td>${fmtVal(d.value, td.unit)}${pct}</td>`
+      }).join('')
+      return `<tr><td><strong>FY${allData[0].data[yi].fiscal_year}</strong></td>${cells}</tr>`
+    }).join('')
+    tableHtml = `<h3 style="margin:24px 0 12px;color:#1e293b">${t('trendTable')}</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <thead><tr style="background:#f8fafc"><th style="padding:10px 14px;border:1px solid #e2e8f0;text-align:left">${t('fiscalYear')}</th>${headers}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`.replace(/<th>/g, '<th style="padding:10px 14px;border:1px solid #e2e8f0;text-align:left">')
+      .replace(/<td>/g, '<td style="padding:10px 14px;border:1px solid #e2e8f0;text-align:left">')
+  }
+
+  let metricsHtml = ''
+  if (reportMetrics.value.length) {
+    const cards = reportMetrics.value.map(mc => {
+      const changeHtml = mc.change != null
+        ? `<div style="font-size:13px;font-weight:600;color:${mc.change > 0 ? '#16a34a' : '#dc2626'}">${mc.change > 0 ? '+' : ''}${mc.change.toFixed(1)}%</div>`
+        : ''
+      return `<div style="flex:1;min-width:140px;text-align:center;padding:16px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
+        <div style="font-size:22px;font-weight:700;color:#1e293b">${mc.value}</div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px">${mc.label}</div>
+        ${changeHtml}
+      </div>`
+    }).join('')
+    metricsHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">${cards}</div>`
+  }
+
+  const chartSection = chartImg
+    ? `<h3 style="margin:24px 0 12px;color:#1e293b">${t('trendChart')}</h3><div style="text-align:center"><img src="${chartImg}" style="max-width:100%;height:auto;border-radius:8px" /></div>`
+    : ''
+
+  const mdContent = reportText.value ? renderMd(reportText.value) : ''
+
+  const html = `<!DOCTYPE html>
+<html lang="${locale.value}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 0 auto; padding: 40px 32px; color: #1e293b; line-height: 1.7; }
+  h1 { font-size: 26px; border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 6px; }
+  h2 { font-size: 20px; margin: 24px 0 10px; color: #0f172a; }
+  h3 { font-size: 17px; margin: 20px 0 8px; color: #0f172a; }
+  p { margin-bottom: 10px; }
+  ul, ol { padding-left: 20px; margin-bottom: 10px; }
+  li { margin-bottom: 4px; }
+  strong { color: #0f172a; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; }
+  th { background: #f8fafc; font-weight: 600; }
+  code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  pre { background: #f8fafc; padding: 14px; border-radius: 8px; overflow-x: auto; border: 1px solid #e2e8f0; }
+  blockquote { border-left: 3px solid #2563eb; padding-left: 14px; margin: 12px 0; color: #475569; }
+  .subtitle { color: #64748b; font-size: 14px; margin-bottom: 28px; }
+  @media print { body { padding: 20px; } }
+</style>
+</head>
+<body>
+  <h1>${title}</h1>
+  <p class="subtitle">AAPL · SEC 10-K · FY2020–2025 · ${date}</p>
+  ${metricsHtml}
+  ${mdContent}
+  ${chartSection}
+  ${tableHtml}
+</body>
+</html>`
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `AAPL_Report_${activeReport.value}_${new Date().toISOString().slice(0, 10)}.html`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 </script>
 
 <style>
@@ -802,14 +937,29 @@ button, input, textarea, select { color: inherit; font: inherit; }
 .template-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
 
 .report-content { max-width: 850px; margin: 0 auto; }
+
+.report-toolbar {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+}
 .back-btn {
   background: none; border: none; color: var(--text-muted); font-size: 13px;
-  cursor: pointer; margin-bottom: 16px; padding: 4px 0;
+  cursor: pointer; padding: 6px 0;
 }
 .back-btn:hover { color: var(--accent); }
-.report-heading { font-size: 24px; font-weight: 700; margin-bottom: 20px; }
 
-.metric-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.download-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 18px; border-radius: 8px; border: 1px solid var(--accent);
+  background: transparent; color: var(--accent); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+}
+.download-btn:hover { background: var(--accent); color: #fff; box-shadow: 0 2px 10px rgba(37,99,235,0.25); }
+
+.report-body { }
+.report-heading { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+.report-date { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+
+.metric-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
 .metric-card { padding: 16px 20px; min-width: 150px; flex: 1; text-align: center; }
 .mc-value { display: block; font-size: 22px; font-weight: 700; color: var(--text-primary); }
 .mc-label { display: block; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
@@ -817,10 +967,21 @@ button, input, textarea, select { color: inherit; font: inherit; }
 .mc-change.up { color: var(--success); }
 .mc-change.down { color: var(--danger); }
 
-.report-chart-section { padding: 20px; margin-bottom: 20px; }
+.report-section { margin-bottom: 24px; }
+.section-heading { font-size: 17px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; padding-left: 10px; border-left: 3px solid var(--accent); }
+
+.report-chart-wrap { padding: 20px; }
 .report-chart { width: 100%; height: 340px; }
 
-.report-text { padding: 24px; margin-bottom: 20px; }
+.report-table-wrap { padding: 0; overflow-x: auto; }
+.trend-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.trend-table th, .trend-table td { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; text-align: left; }
+.trend-table th { background: #f8fafc; font-weight: 600; color: #1e293b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+.trend-table tbody tr:hover { background: #f8fafc; }
+.trend-table td { color: #334155; }
+.table-pct { font-size: 11px; font-weight: 600; margin-left: 6px; }
+.table-pct.up { color: var(--success); }
+.table-pct.down { color: var(--danger); }
 
 .report-loading { display: flex; align-items: center; gap: 12px; padding: 24px; color: var(--text-muted); }
 </style>
