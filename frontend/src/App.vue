@@ -130,12 +130,12 @@
 
       <!-- ==================== REPORT VIEW ==================== -->
       <div v-if="activeTab === 'report'" class="report-view">
-        <!-- Template selector -->
-        <div v-if="!activeReport" class="report-templates">
+        <!-- Step 1: Template selector -->
+        <div v-if="reportStep === 'select'" class="report-templates">
           <h2>{{ t('reportTitle') }}</h2>
           <p class="report-subtitle">{{ t('reportDesc') }}</p>
           <div class="template-grid">
-            <button v-for="r in localizedReports" :key="r.id" class="template-card glass-card" @click="generateReport(r.id)">
+            <button v-for="r in localizedReports" :key="r.id" class="template-card glass-card" @click="selectReport(r.id)">
               <span class="template-icon">{{ r.icon }}</span>
               <span class="template-name">{{ r.name }}</span>
               <span class="template-desc">{{ r.desc }}</span>
@@ -143,21 +143,70 @@
           </div>
         </div>
 
-        <!-- Report content -->
-        <div v-else class="report-content" ref="reportContentRef">
+        <!-- Step 2: Parameter configuration -->
+        <div v-if="reportStep === 'config'" class="report-config">
+          <button class="back-btn" @click="reportStep = 'select'">← {{ t('backToTemplates') }}</button>
+          <h2 class="config-heading">{{ activeReportTitle }}</h2>
+          <p class="config-desc">{{ t('configDesc') }}</p>
+
+          <div class="param-form glass-card">
+            <div v-for="param in currentParams" :key="param.key" class="param-group">
+              <label class="param-label">{{ param.label[locale] }}</label>
+
+              <div v-if="param.type === 'yearRange'" class="param-year-range">
+                <select v-model="paramValues[param.key + '_start']" class="param-select">
+                  <option v-for="y in yearOptions" :key="y" :value="y">FY{{ y }}</option>
+                </select>
+                <span class="range-sep">—</span>
+                <select v-model="paramValues[param.key + '_end']" class="param-select">
+                  <option v-for="y in yearOptions" :key="y" :value="y">FY{{ y }}</option>
+                </select>
+              </div>
+
+              <select v-if="param.type === 'select'" v-model="paramValues[param.key]" class="param-select">
+                <option v-for="opt in param.options" :key="opt.value" :value="opt.value">{{ opt.label[locale] }}</option>
+              </select>
+
+              <div v-if="param.type === 'multiselect'" class="param-chips">
+                <label v-for="opt in param.options" :key="opt.value" class="param-chip"
+                  :class="{ active: (paramValues[param.key] as string[])?.includes(opt.value) }">
+                  <input type="checkbox" :value="opt.value"
+                    @change="toggleMulti(param.key, opt.value)" hidden />
+                  {{ opt.label[locale] }}
+                </label>
+              </div>
+
+              <div v-if="param.type === 'radio'" class="param-radios">
+                <label v-for="opt in param.options" :key="opt.value" class="param-radio"
+                  :class="{ active: paramValues[param.key] === opt.value }">
+                  <input type="radio" :name="param.key" :value="opt.value"
+                    v-model="paramValues[param.key]" hidden />
+                  {{ opt.label[locale] }}
+                </label>
+              </div>
+            </div>
+
+            <button class="generate-btn" @click="runReport">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              {{ t('generateBtn') }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 3: Report content -->
+        <div v-if="reportStep === 'result'" class="report-content">
           <div class="report-toolbar">
-            <button class="back-btn" @click="activeReport = null">← {{ t('backToTemplates') }}</button>
-            <button v-if="!reportLoading && reportText" class="download-btn" @click="downloadReport">
+            <button class="back-btn" @click="reportStep = 'config'">← {{ t('backToConfig') }}</button>
+            <button v-if="!reportLoading && reportText" class="download-btn" @click="downloadReportPdf">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              {{ t('download') }}
+              {{ t('downloadPdf') }}
             </button>
           </div>
 
           <div class="report-body" ref="reportBodyRef">
             <h2 class="report-heading">{{ activeReportTitle }}</h2>
-            <p class="report-date">AAPL · SEC 10-K · FY2020–2025 · {{ new Date().toLocaleDateString() }}</p>
+            <p class="report-date">AAPL · SEC 10-K · FY{{ paramValues.year_start || 2020 }}–{{ paramValues.year_end || 2025 }} · {{ new Date().toLocaleDateString() }}</p>
 
-            <!-- KPI cards -->
             <div v-if="reportMetrics.length" class="metric-cards">
               <div v-for="mc in reportMetrics" :key="mc.label" class="metric-card glass-card">
                 <span class="mc-value">{{ mc.value }}</span>
@@ -168,12 +217,10 @@
               </div>
             </div>
 
-            <!-- LLM analysis -->
             <div v-if="reportText" class="report-section">
               <div class="markdown-body" v-html="renderMd(reportText)"></div>
             </div>
 
-            <!-- Chart inline in report -->
             <div v-if="reportChartData" class="report-section">
               <h3 class="section-heading">{{ t('trendChart') }}</h3>
               <div class="report-chart-wrap glass-card">
@@ -181,7 +228,6 @@
               </div>
             </div>
 
-            <!-- Trend data table -->
             <div v-if="reportChartData" class="report-section">
               <h3 class="section-heading">{{ t('trendTable') }}</h3>
               <div class="report-table-wrap glass-card">
@@ -219,9 +265,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, reactive, onMounted, nextTick, watch } from 'vue'
 import * as echarts from 'echarts'
 import { marked } from 'marked'
+import jsPDF from 'jspdf'
+import html2canvas from 'html2canvas'
 import { ask, getTrends, getSystemStatus, type AskResponse, type TrendsResponse, type Citation, type HistoryMessage } from './api/client'
 
 marked.setOptions({ breaks: true, gfm: true })
@@ -241,8 +289,10 @@ const i18n: Record<Locale, Record<string, string>> = {
     qt_narrative: 'Narrative', qt_metric: 'Metric', qt_comparative: 'Comparative', qt_report: 'Report', qt_error: 'Error',
     cf_high: 'High', cf_medium: 'Medium', cf_low: 'Low',
     reportTitle: 'Analysis Reports', reportDesc: 'Generate structured reports powered by RAG + financial data.',
-    backToTemplates: 'Back', generatingReport: 'Generating report...',
-    download: 'Download', trendChart: 'Financial Trends', trendTable: 'Detailed Data', fiscalYear: 'Fiscal Year',
+    backToTemplates: 'Back', backToConfig: 'Parameters', generatingReport: 'Generating report...',
+    downloadPdf: 'Download PDF', trendChart: 'Financial Trends', trendTable: 'Detailed Data', fiscalYear: 'Fiscal Year',
+    configDesc: 'Configure report parameters below, then generate.',
+    generateBtn: 'Generate Report', exportingPdf: 'Exporting PDF...',
   },
   zh: {
     chat: '对话', report: '报告', newChat: '新对话', systemReady: '在线', connecting: '连接中',
@@ -253,8 +303,10 @@ const i18n: Record<Locale, Record<string, string>> = {
     qt_narrative: '叙述型', qt_metric: '数值型', qt_comparative: '比较型', qt_report: '报告', qt_error: '错误',
     cf_high: '高置信', cf_medium: '中置信', cf_low: '低置信',
     reportTitle: '分析报告', reportDesc: '基于 RAG + 结构化金融数据生成专业分析报告。',
-    backToTemplates: '返回', generatingReport: '正在生成报告...',
-    download: '下载报告', trendChart: '财务趋势', trendTable: '详细数据', fiscalYear: '财政年度',
+    backToTemplates: '返回', backToConfig: '参数设置', generatingReport: '正在生成报告...',
+    downloadPdf: '下载 PDF', trendChart: '财务趋势', trendTable: '详细数据', fiscalYear: '财政年度',
+    configDesc: '请在下方配置报告参数，然后点击生成。',
+    generateBtn: '生成报告', exportingPdf: '正在导出 PDF...',
   },
 }
 function t(k: string) { return i18n[locale.value][k] ?? k }
@@ -508,62 +560,253 @@ function renderAllCharts() {
 watch(messages, () => { nextTick(() => renderAllCharts()) }, { deep: true })
 
 // ─── Report system ──────────────────────────────────────────────
+type ReportStep = 'select' | 'config' | 'result'
+const reportStep = ref<ReportStep>('select')
 const activeReport = ref<string | null>(null)
 const reportLoading = ref(false)
 const reportText = ref('')
 const reportMetrics = ref<{ label: string; value: string; change?: number }[]>([])
 const reportChartData = ref<TrendsResponse[] | null>(null)
 const reportChartRef = ref<HTMLElement | null>(null)
-const reportContentRef = ref<HTMLElement | null>(null)
 const reportBodyRef = ref<HTMLElement | null>(null)
 let reportChartInstance: echarts.ECharts | null = null
+
+const yearOptions = [2020, 2021, 2022, 2023, 2024, 2025]
 
 const activeReportTitle = computed(() => {
   const r = localizedReports.value.find(r => r.id === activeReport.value)
   return r ? `${r.icon} ${r.name}` : ''
 })
 
-const reportConfigs: Record<string, { metrics: string[]; question: string; questionZh: string }> = {
-  annual: {
-    metrics: ['net_sales', 'net_income', 'eps_diluted'],
-    question: "Provide a comprehensive overview of Apple's financial performance from FY2020 to FY2025, covering revenue growth, profitability, and key highlights.",
-    questionZh: "Provide a comprehensive overview of Apple's financial performance from FY2020 to FY2025, covering revenue growth, profitability, and key highlights.",
-  },
-  risk: {
-    metrics: [],
-    question: "What are the most significant risk factors Apple disclosed in its recent 10-K filings, and how have they evolved from FY2020 to FY2025?",
-    questionZh: "What are the most significant risk factors Apple disclosed in its recent 10-K filings, and how have they evolved from FY2020 to FY2025?",
-  },
-  profit: {
-    metrics: ['gross_profit', 'operating_income', 'net_income'],
-    question: "Analyze Apple's profitability trends from FY2020 to FY2025, including gross margin, operating margin changes and the underlying drivers.",
-    questionZh: "Analyze Apple's profitability trends from FY2020 to FY2025, including gross margin, operating margin changes and the underlying drivers.",
-  },
-  rnd: {
-    metrics: ['rd_expense'],
-    question: "How has Apple's R&D spending evolved from FY2020 to FY2025, and what does the 10-K reveal about their product strategy and innovation focus?",
-    questionZh: "How has Apple's R&D spending evolved from FY2020 to FY2025, and what does the 10-K reveal about their product strategy and innovation focus?",
-  },
-  brief: {
-    metrics: ['net_sales', 'net_income', 'eps_diluted', 'operating_cash_flow'],
-    question: "Create a concise investment research brief for Apple (AAPL) covering: business overview, financial highlights (FY2020-2025), key risks, competitive positioning, and growth outlook based on the 10-K filings.",
-    questionZh: "Create a concise investment research brief for Apple (AAPL) covering: business overview, financial highlights (FY2020-2025), key risks, competitive positioning, and growth outlook based on the 10-K filings.",
-  },
+// ─── Parameter definitions ──────────────────────────────────────
+interface ParamOption { value: string; label: Record<Locale, string> }
+interface ParamDef {
+  key: string
+  type: 'yearRange' | 'select' | 'multiselect' | 'radio'
+  label: Record<Locale, string>
+  options?: ParamOption[]
+  default: any
 }
 
-async function generateReport(id: string) {
+const metricOptions: ParamOption[] = [
+  { value: 'net_sales', label: { en: 'Net Revenue', zh: '净营收' } },
+  { value: 'gross_profit', label: { en: 'Gross Profit', zh: '毛利润' } },
+  { value: 'operating_income', label: { en: 'Operating Income', zh: '营业利润' } },
+  { value: 'net_income', label: { en: 'Net Income', zh: '净利润' } },
+  { value: 'eps_diluted', label: { en: 'Diluted EPS', zh: '稀释EPS' } },
+  { value: 'rd_expense', label: { en: 'R&D Expense', zh: '研发费用' } },
+  { value: 'total_assets', label: { en: 'Total Assets', zh: '总资产' } },
+  { value: 'operating_cash_flow', label: { en: 'Operating Cash Flow', zh: '经营现金流' } },
+  { value: 'share_repurchases', label: { en: 'Share Repurchases', zh: '股票回购' } },
+  { value: 'capex', label: { en: 'Capital Expenditure', zh: '资本支出' } },
+  { value: 'long_term_debt', label: { en: 'Long-term Debt', zh: '长期负债' } },
+  { value: 'total_equity', label: { en: "Stockholders' Equity", zh: '股东权益' } },
+]
+
+const reportParamDefs: Record<string, ParamDef[]> = {
+  annual: [
+    { key: 'year', type: 'yearRange', label: { en: 'Fiscal Year Range', zh: '财政年度范围' }, default: null },
+    { key: 'focus_metrics', type: 'multiselect', label: { en: 'Focus Metrics', zh: '关注指标' },
+      options: metricOptions.filter(m => ['net_sales','net_income','eps_diluted','operating_cash_flow','total_assets'].includes(m.value)),
+      default: ['net_sales', 'net_income', 'eps_diluted'] },
+    { key: 'depth', type: 'radio', label: { en: 'Analysis Depth', zh: '分析深度' },
+      options: [
+        { value: 'summary', label: { en: 'Executive Summary', zh: '摘要版' } },
+        { value: 'detailed', label: { en: 'Detailed Analysis', zh: '详细分析' } },
+      ], default: 'detailed' },
+  ],
+  risk: [
+    { key: 'year', type: 'yearRange', label: { en: 'Fiscal Year Range', zh: '财政年度范围' }, default: null },
+    { key: 'risk_categories', type: 'multiselect', label: { en: 'Risk Categories', zh: '风险类别' },
+      options: [
+        { value: 'market', label: { en: 'Market & Competition', zh: '市场与竞争' } },
+        { value: 'regulatory', label: { en: 'Regulatory & Legal', zh: '监管与法律' } },
+        { value: 'supply_chain', label: { en: 'Supply Chain & Manufacturing', zh: '供应链与制造' } },
+        { value: 'macro', label: { en: 'Macroeconomic & FX', zh: '宏观经济与汇率' } },
+        { value: 'tech', label: { en: 'Technology & Cybersecurity', zh: '技术与网络安全' } },
+        { value: 'geopolitical', label: { en: 'Geopolitical & Tariffs', zh: '地缘政治与关税' } },
+      ], default: ['market', 'regulatory', 'supply_chain'] },
+    { key: 'evolution', type: 'radio', label: { en: 'Include YoY Evolution', zh: '包含同比演变分析' },
+      options: [
+        { value: 'yes', label: { en: 'Yes — compare across years', zh: '是 — 跨年对比' } },
+        { value: 'no', label: { en: 'No — latest year only', zh: '否 — 仅最新年度' } },
+      ], default: 'yes' },
+  ],
+  profit: [
+    { key: 'year', type: 'yearRange', label: { en: 'Fiscal Year Range', zh: '财政年度范围' }, default: null },
+    { key: 'margin_metrics', type: 'multiselect', label: { en: 'Profitability Metrics', zh: '盈利指标' },
+      options: [
+        { value: 'gross_profit', label: { en: 'Gross Profit', zh: '毛利润' } },
+        { value: 'operating_income', label: { en: 'Operating Income', zh: '营业利润' } },
+        { value: 'net_income', label: { en: 'Net Income', zh: '净利润' } },
+        { value: 'cost_of_sales', label: { en: 'Cost of Sales', zh: '销售成本' } },
+        { value: 'rd_expense', label: { en: 'R&D Expense', zh: '研发费用' } },
+        { value: 'net_sales', label: { en: 'Net Revenue (for margin calc)', zh: '净营收（用于利润率计算）' } },
+      ],
+      default: ['gross_profit', 'operating_income', 'net_income'] },
+    { key: 'include_drivers', type: 'radio', label: { en: 'Include Driver Analysis', zh: '包含驱动因素分析' },
+      options: [
+        { value: 'yes', label: { en: 'Yes — explain margin shifts', zh: '是 — 解释利润率变化原因' } },
+        { value: 'no', label: { en: 'No — numbers only', zh: '否 — 仅数据' } },
+      ], default: 'yes' },
+  ],
+  rnd: [
+    { key: 'year', type: 'yearRange', label: { en: 'Fiscal Year Range', zh: '财政年度范围' }, default: null },
+    { key: 'comparison', type: 'multiselect', label: { en: 'Compare R&D With', zh: 'R&D 对比指标' },
+      options: [
+        { value: 'net_sales', label: { en: 'Net Revenue (R&D Intensity)', zh: '净营收（研发强度）' } },
+        { value: 'operating_income', label: { en: 'Operating Income', zh: '营业利润' } },
+        { value: 'capex', label: { en: 'Capital Expenditure', zh: '资本支出' } },
+      ], default: ['net_sales'] },
+    { key: 'strategy_focus', type: 'radio', label: { en: 'Strategy Focus', zh: '战略重点' },
+      options: [
+        { value: 'product', label: { en: 'Product Innovation', zh: '产品创新' } },
+        { value: 'platform', label: { en: 'Platform & Services', zh: '平台与服务' } },
+        { value: 'both', label: { en: 'Both', zh: '两者兼顾' } },
+      ], default: 'both' },
+  ],
+  brief: [
+    { key: 'year', type: 'yearRange', label: { en: 'Fiscal Year Range', zh: '财政年度范围' }, default: null },
+    { key: 'framework', type: 'radio', label: { en: 'Analysis Framework', zh: '分析框架' },
+      options: [
+        { value: 'canslim', label: { en: "CAN SLIM (William O'Neil)", zh: "CAN SLIM（威廉·奥尼尔）" } },
+        { value: 'fundamental', label: { en: 'Fundamental Analysis', zh: '基本面分析' } },
+        { value: 'comprehensive', label: { en: 'Comprehensive', zh: '综合分析' } },
+      ], default: 'canslim' },
+    { key: 'focus_areas', type: 'multiselect', label: { en: 'Focus Areas', zh: '关注领域' },
+      options: [
+        { value: 'earnings', label: { en: 'Earnings Growth & Quality', zh: '盈利增长与质量' } },
+        { value: 'revenue', label: { en: 'Revenue Momentum', zh: '营收动能' } },
+        { value: 'cash_flow', label: { en: 'Cash Flow & Capital Allocation', zh: '现金流与资本配置' } },
+        { value: 'competitive', label: { en: 'Competitive Positioning', zh: '竞争定位' } },
+        { value: 'risks', label: { en: 'Key Risks', zh: '主要风险' } },
+        { value: 'outlook', label: { en: 'Growth Outlook', zh: '增长前景' } },
+      ], default: ['earnings', 'revenue', 'cash_flow', 'competitive'] },
+    { key: 'depth', type: 'radio', label: { en: 'Report Length', zh: '报告篇幅' },
+      options: [
+        { value: 'brief', label: { en: 'One-page Brief', zh: '一页简报' } },
+        { value: 'detailed', label: { en: 'Detailed Report', zh: '详细报告' } },
+      ], default: 'detailed' },
+  ],
+}
+
+const paramValues = reactive<Record<string, any>>({
+  year_start: 2020,
+  year_end: 2025,
+})
+
+const currentParams = computed<ParamDef[]>(() => {
+  if (!activeReport.value) return []
+  return reportParamDefs[activeReport.value] || []
+})
+
+function selectReport(id: string) {
   activeReport.value = id
+  const defs = reportParamDefs[id] || []
+  paramValues.year_start = 2020
+  paramValues.year_end = 2025
+  for (const d of defs) {
+    if (d.type === 'yearRange') continue
+    paramValues[d.key] = Array.isArray(d.default) ? [...d.default] : d.default
+  }
+  reportStep.value = 'config'
+}
+
+function toggleMulti(key: string, value: string) {
+  const arr = paramValues[key] as string[]
+  const idx = arr.indexOf(value)
+  if (idx >= 0) arr.splice(idx, 1)
+  else arr.push(value)
+}
+
+// ─── Prompt builders per report type ────────────────────────────
+function buildReportPrompt(): { question: string; metrics: string[] } {
+  const id = activeReport.value!
+  const ys = paramValues.year_start
+  const ye = paramValues.year_end
+
+  switch (id) {
+    case 'annual': {
+      const focusNames = (paramValues.focus_metrics as string[]).map(m => fmtMetric(m)).join(', ')
+      const depth = paramValues.depth === 'summary' ? 'concise executive summary (300-400 words)' : 'detailed analysis (800-1200 words)'
+      return {
+        metrics: paramValues.focus_metrics as string[],
+        question: `Provide a ${depth} of Apple Inc.'s (AAPL) financial performance from FY${ys} to FY${ye} based on SEC 10-K filings. Focus on these key metrics: ${focusNames}. Cover: 1) Revenue and growth trajectory, 2) Profitability trends, 3) Key highlights and inflection points, 4) Year-over-year changes and CAGR where applicable. Use specific figures from the filings.`,
+      }
+    }
+    case 'risk': {
+      const categories = (paramValues.risk_categories as string[]).map(c => {
+        const opt = reportParamDefs.risk[1].options?.find(o => o.value === c)
+        return opt ? opt.label.en : c
+      }).join(', ')
+      const evolution = paramValues.evolution === 'yes'
+        ? `Compare how these risks have evolved across FY${ys} to FY${ye}, noting new risks that appeared or risks that were removed.`
+        : `Focus on the most recent fiscal year (FY${ye}) 10-K filing.`
+      return {
+        metrics: ['net_sales', 'operating_income'],
+        question: `Analyze Apple's (AAPL) risk factors as disclosed in Item 1A of the 10-K filings (FY${ys}–FY${ye}). Focus on these categories: ${categories}. ${evolution} For each risk category: 1) Summarize the key risks disclosed, 2) Assess severity and likelihood, 3) Note any mitigating factors Apple mentions. Provide specific quotes or references from the filings where relevant.`,
+      }
+    }
+    case 'profit': {
+      const marginNames = (paramValues.margin_metrics as string[]).map(m => fmtMetric(m)).join(', ')
+      const drivers = paramValues.include_drivers === 'yes'
+        ? 'For each margin shift, explain the underlying drivers (product mix, cost structure, pricing, R&D allocation, etc.) citing specific 10-K disclosures from Item 7 MD&A.'
+        : ''
+      return {
+        metrics: paramValues.margin_metrics as string[],
+        question: `Analyze Apple's (AAPL) profitability from FY${ys} to FY${ye} based on 10-K filings. Key metrics: ${marginNames}. Cover: 1) Gross margin evolution and cost structure, 2) Operating margin trends, 3) Net margin and bottom-line performance, 4) Segment-level profitability insights if available. ${drivers} Calculate margin percentages where data is available.`,
+      }
+    }
+    case 'rnd': {
+      const compMetrics = (paramValues.comparison as string[]).map(m => fmtMetric(m)).join(', ')
+      const strategy = paramValues.strategy_focus === 'product' ? 'product innovation and hardware/software integration'
+        : paramValues.strategy_focus === 'platform' ? 'platform ecosystem and services growth'
+        : 'both product innovation and platform/services strategy'
+      return {
+        metrics: ['rd_expense', ...(paramValues.comparison as string[])],
+        question: `Analyze Apple's (AAPL) R&D spending and innovation strategy from FY${ys} to FY${ye}. Compare R&D expense against: ${compMetrics}. Focus on ${strategy}. Cover: 1) R&D spending trend and growth rate, 2) R&D as percentage of revenue (R&D intensity), 3) What the 10-K MD&A sections reveal about strategic priorities, 4) How R&D investment correlates with product launches and revenue growth. Use specific figures from Item 7 and Item 8.`,
+      }
+    }
+    case 'brief': {
+      const framework = paramValues.framework
+      const areas = (paramValues.focus_areas as string[]).map(a => {
+        const opt = reportParamDefs.brief[2].options?.find(o => o.value === a)
+        return opt ? opt.label.en : a
+      }).join(', ')
+      const length = paramValues.depth === 'brief' ? 'concise one-page brief (500 words max)' : 'detailed investment report (1000-1500 words)'
+      let frameworkInstr = ''
+      if (framework === 'canslim') {
+        frameworkInstr = "Structure the analysis using William O'Neil's CAN SLIM framework: C (Current quarterly earnings), A (Annual earnings growth), N (New products/management/highs), S (Supply and demand), L (Leader or laggard), I (Institutional sponsorship), M (Market direction). Apply each factor to AAPL's 10-K data."
+      } else if (framework === 'fundamental') {
+        frameworkInstr = 'Use fundamental analysis structure: Business Quality, Financial Health, Valuation Context, Growth Drivers, Risk Assessment.'
+      } else {
+        frameworkInstr = "Combine fundamental analysis with William O'Neil's CAN SLIM lens where applicable."
+      }
+      return {
+        metrics: ['net_sales', 'net_income', 'eps_diluted', 'operating_cash_flow'],
+        question: `Create a ${length} for Apple Inc. (AAPL) based on 10-K filings from FY${ys} to FY${ye}. ${frameworkInstr} Focus areas: ${areas}. Include: specific financial figures, growth rates, and CAGR calculations. End with a clear investment thesis summary. Cite specific 10-K sections.`,
+      }
+    }
+    default:
+      return { metrics: ['net_sales'], question: `Analyze Apple's 10-K filings from FY${ys} to FY${ye}.` }
+  }
+}
+
+async function runReport() {
+  reportStep.value = 'result'
   reportLoading.value = true
   reportText.value = ''
   reportMetrics.value = []
   reportChartData.value = null
-  const cfg = reportConfigs[id]
-  if (!cfg) return
+
+  const { question, metrics } = buildReportPrompt()
 
   try {
+    const ys = paramValues.year_start as number
+    const ye = paramValues.year_end as number
     const [trends, resp] = await Promise.all([
-      Promise.all(cfg.metrics.map(m => getTrends(m).catch(() => null))),
-      ask({ question: cfg.question, lang: locale.value }),
+      Promise.all(metrics.map(m => getTrends(m, ys, ye).catch(() => null))),
+      ask({ question, lang: locale.value }),
     ])
 
     const validTrends = trends.filter(Boolean) as TrendsResponse[]
@@ -598,7 +841,7 @@ function renderReportChart() {
   const years = allData[0].data.map(d => `FY${d.fiscal_year}`)
 
   reportChartInstance.setOption({
-    backgroundColor: 'transparent',
+    backgroundColor: '#ffffff',
     tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: '#1e293b' } },
     legend: { data: allData.map(d => fmtMetric(d.metric)), textStyle: { color: '#475569' }, top: 0 },
     grid: { left: '10%', right: '5%', top: '14%', bottom: '10%' },
@@ -619,96 +862,63 @@ function renderReportChart() {
 
 watch(reportChartData, () => { nextTick(() => renderReportChart()) })
 
-function downloadReport() {
-  const title = activeReportTitle.value
-  const date = new Date().toLocaleDateString()
-  const chartImg = reportChartInstance ? reportChartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#fff' }) : ''
+// ─── PDF export ─────────────────────────────────────────────────
+const pdfExporting = ref(false)
 
-  let tableHtml = ''
-  if (reportChartData.value?.length) {
-    const allData = reportChartData.value
-    const headers = allData.map(td => `<th>${fmtMetric(td.metric)}</th>`).join('')
-    const rows = allData[0].data.map((_, yi) => {
-      const cells = allData.map(td => {
-        const d = td.data[yi]
-        const pct = d.yoy_pct != null ? ` <span style="color:${d.yoy_pct > 0 ? '#16a34a' : '#dc2626'};font-size:12px">(${d.yoy_pct > 0 ? '+' : ''}${d.yoy_pct.toFixed(1)}%)</span>` : ''
-        return `<td>${fmtVal(d.value, td.unit)}${pct}</td>`
-      }).join('')
-      return `<tr><td><strong>FY${allData[0].data[yi].fiscal_year}</strong></td>${cells}</tr>`
-    }).join('')
-    tableHtml = `<h3 style="margin:24px 0 12px;color:#1e293b">${t('trendTable')}</h3>
-      <table style="width:100%;border-collapse:collapse;font-size:14px">
-        <thead><tr style="background:#f8fafc"><th style="padding:10px 14px;border:1px solid #e2e8f0;text-align:left">${t('fiscalYear')}</th>${headers}</tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`.replace(/<th>/g, '<th style="padding:10px 14px;border:1px solid #e2e8f0;text-align:left">')
-      .replace(/<td>/g, '<td style="padding:10px 14px;border:1px solid #e2e8f0;text-align:left">')
+async function downloadReportPdf() {
+  if (!reportBodyRef.value || pdfExporting.value) return
+  pdfExporting.value = true
+
+  try {
+    const el = reportBodyRef.value
+    const canvas = await html2canvas(el, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+      windowWidth: el.scrollWidth,
+    })
+
+    const pxW = canvas.width
+    const pxH = canvas.height
+
+    const pageW = 210
+    const margin = 12
+    const contentW = pageW - margin * 2
+    const scaledH = (pxH * contentW) / pxW
+
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const pageH = 297
+    const usableH = pageH - margin * 2
+
+    const totalPages = Math.ceil(scaledH / usableH)
+
+    for (let page = 0; page < totalPages; page++) {
+      if (page > 0) pdf.addPage()
+
+      const srcY = (page * usableH * pxH) / scaledH
+      const srcH = Math.min((usableH * pxH) / scaledH, pxH - srcY)
+      const destH = (srcH * contentW) / pxW
+
+      const sliceCanvas = document.createElement('canvas')
+      sliceCanvas.width = pxW
+      sliceCanvas.height = Math.ceil(srcH)
+      const ctx = sliceCanvas.getContext('2d')!
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height)
+      ctx.drawImage(canvas, 0, srcY, pxW, srcH, 0, 0, pxW, srcH)
+
+      const sliceData = sliceCanvas.toDataURL('image/png')
+      pdf.addImage(sliceData, 'PNG', margin, margin, contentW, destH)
+    }
+
+    const filename = `AAPL_${activeReport.value}_FY${paramValues.year_start}-${paramValues.year_end}_${new Date().toISOString().slice(0, 10)}.pdf`
+    pdf.save(filename)
+  } catch (e: any) {
+    console.error('PDF export failed:', e)
+  } finally {
+    pdfExporting.value = false
   }
-
-  let metricsHtml = ''
-  if (reportMetrics.value.length) {
-    const cards = reportMetrics.value.map(mc => {
-      const changeHtml = mc.change != null
-        ? `<div style="font-size:13px;font-weight:600;color:${mc.change > 0 ? '#16a34a' : '#dc2626'}">${mc.change > 0 ? '+' : ''}${mc.change.toFixed(1)}%</div>`
-        : ''
-      return `<div style="flex:1;min-width:140px;text-align:center;padding:16px 12px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">
-        <div style="font-size:22px;font-weight:700;color:#1e293b">${mc.value}</div>
-        <div style="font-size:12px;color:#64748b;margin-top:4px">${mc.label}</div>
-        ${changeHtml}
-      </div>`
-    }).join('')
-    metricsHtml = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">${cards}</div>`
-  }
-
-  const chartSection = chartImg
-    ? `<h3 style="margin:24px 0 12px;color:#1e293b">${t('trendChart')}</h3><div style="text-align:center"><img src="${chartImg}" style="max-width:100%;height:auto;border-radius:8px" /></div>`
-    : ''
-
-  const mdContent = reportText.value ? renderMd(reportText.value) : ''
-
-  const html = `<!DOCTYPE html>
-<html lang="${locale.value}">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${title}</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif; max-width: 900px; margin: 0 auto; padding: 40px 32px; color: #1e293b; line-height: 1.7; }
-  h1 { font-size: 26px; border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 6px; }
-  h2 { font-size: 20px; margin: 24px 0 10px; color: #0f172a; }
-  h3 { font-size: 17px; margin: 20px 0 8px; color: #0f172a; }
-  p { margin-bottom: 10px; }
-  ul, ol { padding-left: 20px; margin-bottom: 10px; }
-  li { margin-bottom: 4px; }
-  strong { color: #0f172a; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
-  th, td { padding: 8px 12px; border: 1px solid #e2e8f0; text-align: left; }
-  th { background: #f8fafc; font-weight: 600; }
-  code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-  pre { background: #f8fafc; padding: 14px; border-radius: 8px; overflow-x: auto; border: 1px solid #e2e8f0; }
-  blockquote { border-left: 3px solid #2563eb; padding-left: 14px; margin: 12px 0; color: #475569; }
-  .subtitle { color: #64748b; font-size: 14px; margin-bottom: 28px; }
-  @media print { body { padding: 20px; } }
-</style>
-</head>
-<body>
-  <h1>${title}</h1>
-  <p class="subtitle">AAPL · SEC 10-K · FY2020–2025 · ${date}</p>
-  ${metricsHtml}
-  ${mdContent}
-  ${chartSection}
-  ${tableHtml}
-</body>
-</html>`
-
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `AAPL_Report_${activeReport.value}_${new Date().toISOString().slice(0, 10)}.html`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
 }
 </script>
 
@@ -937,6 +1147,42 @@ button, input, textarea, select { color: inherit; font: inherit; }
 .template-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
 
 .report-content { max-width: 850px; margin: 0 auto; }
+.report-config { max-width: 700px; margin: 0 auto; }
+
+.config-heading { font-size: 22px; font-weight: 700; margin: 8px 0 4px; }
+.config-desc { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; }
+
+.param-form { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+
+.param-group { display: flex; flex-direction: column; gap: 8px; }
+.param-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+.param-year-range { display: flex; align-items: center; gap: 10px; }
+.range-sep { color: var(--text-muted); }
+.param-select {
+  padding: 8px 12px; border-radius: 8px; border: 1px solid var(--glass-border);
+  background: var(--bg-base); color: var(--text-primary); font-size: 14px; cursor: pointer;
+}
+.param-select:focus { border-color: var(--accent); outline: none; }
+
+.param-chips, .param-radios { display: flex; flex-wrap: wrap; gap: 8px; }
+.param-chip, .param-radio {
+  padding: 6px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  border: 1px solid var(--glass-border); background: var(--bg-base);
+  color: var(--text-secondary); transition: all 0.2s; user-select: none;
+}
+.param-chip:hover, .param-radio:hover { border-color: var(--accent); color: var(--accent); }
+.param-chip.active, .param-radio.active {
+  background: #eff6ff; border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
+
+.generate-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 28px; border-radius: 10px; border: none;
+  background: var(--accent-gradient); color: #fff; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s; margin-top: 8px; align-self: flex-start;
+}
+.generate-btn:hover { box-shadow: 0 4px 16px rgba(37,99,235,0.35); transform: translateY(-1px); }
 
 .report-toolbar {
   display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
@@ -955,7 +1201,7 @@ button, input, textarea, select { color: inherit; font: inherit; }
 }
 .download-btn:hover { background: var(--accent); color: #fff; box-shadow: 0 2px 10px rgba(37,99,235,0.25); }
 
-.report-body { }
+.report-body { background: #fff; padding: 32px; border-radius: 12px; border: 1px solid var(--glass-border); }
 .report-heading { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
 .report-date { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
 
