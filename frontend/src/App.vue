@@ -3,37 +3,38 @@
     <header class="header">
       <div class="header-left">
         <h1>AAPL 10-K Intelligence</h1>
-        <span class="subtitle">2020–2025 SEC Filing Analysis</span>
+        <span class="subtitle">{{ t('subtitle') }}</span>
       </div>
       <div class="header-right">
+        <button class="lang-toggle" @click="toggleLang">{{ locale === 'en' ? '中文' : 'EN' }}</button>
         <span class="status-dot" :class="systemOk ? 'ok' : 'err'"></span>
-        <span class="status-text">{{ systemOk ? 'System Ready' : 'Connecting...' }}</span>
+        <span class="status-text">{{ systemOk ? t('systemReady') : t('connecting') }}</span>
       </div>
     </header>
 
     <div class="main">
       <aside class="sidebar">
         <div class="section-group">
-          <h3>Analysis Scenarios</h3>
-          <button v-for="s in scenarios" :key="s.label" class="scenario-btn" @click="askQuestion(s.question)">
+          <h3>{{ t('analysisScenarios') }}</h3>
+          <button v-for="s in localizedScenarios" :key="s.label" class="scenario-btn" @click="askQuestion(s.question)">
             <span class="scenario-icon">{{ s.icon }}</span>
             <span>{{ s.label }}</span>
           </button>
         </div>
 
         <div class="section-group">
-          <h3>Financial Trends</h3>
+          <h3>{{ t('financialTrends') }}</h3>
           <select v-model="selectedMetric" @change="loadTrend" class="metric-select">
-            <option value="">Select metric...</option>
+            <option value="">{{ t('selectMetric') }}</option>
             <option v-for="m in availableMetrics" :key="m" :value="m">{{ formatMetricName(m) }}</option>
           </select>
         </div>
 
         <div class="section-group">
-          <h3>Custom Question</h3>
-          <textarea v-model="customQuestion" placeholder="Ask about Apple's 10-K filings..." class="question-input" rows="3" @keydown.enter.ctrl="askQuestion(customQuestion)"></textarea>
+          <h3>{{ t('customQuestion') }}</h3>
+          <textarea v-model="customQuestion" :placeholder="t('questionPlaceholder')" class="question-input" rows="3" @keydown.enter.ctrl="askQuestion(customQuestion)"></textarea>
           <button class="ask-btn" @click="askQuestion(customQuestion)" :disabled="loading || !customQuestion.trim()">
-            {{ loading ? 'Analyzing...' : 'Analyze' }}
+            {{ loading ? t('analyzing') : t('analyze') }}
           </button>
         </div>
       </aside>
@@ -41,13 +42,13 @@
       <section class="content">
         <div v-if="loading" class="loading-overlay">
           <div class="spinner"></div>
-          <p>Retrieving evidence and generating analysis...</p>
+          <p>{{ t('loadingText') }}</p>
         </div>
 
         <div v-if="answer" class="answer-panel">
           <div class="answer-header">
-            <span class="query-type-badge" :class="answer.query_type">{{ answer.query_type }}</span>
-            <span class="confidence-badge" :class="answer.confidence">{{ answer.confidence }} confidence</span>
+            <span class="query-type-badge" :class="answer.query_type">{{ t('queryType_' + answer.query_type) }}</span>
+            <span class="confidence-badge" :class="answer.confidence">{{ t('confidence_' + answer.confidence) }}</span>
             <span class="timing">{{ answer.debug?.total_time_ms }}ms</span>
           </div>
           <div class="answer-body" v-html="formatAnswer(answer.answer)"></div>
@@ -57,14 +58,14 @@
             <span>Dense: {{ answer.debug.dense_hits }}</span>
             <span>RRF: {{ answer.debug.after_rrf }}</span>
             <span>Reranked: {{ answer.debug.after_rerank }}</span>
-            <span>Context: {{ answer.debug.context_chunks }}</span>
-            <span>Retrieval: {{ answer.debug.retrieval_time_ms }}ms</span>
-            <span>Generation: {{ answer.debug.generation_time_ms }}ms</span>
+            <span>{{ t('context') }}: {{ answer.debug.context_chunks }}</span>
+            <span>{{ t('retrieval') }}: {{ answer.debug.retrieval_time_ms }}ms</span>
+            <span>{{ t('generation') }}: {{ answer.debug.generation_time_ms }}ms</span>
           </div>
         </div>
 
         <div v-if="answer?.citations?.length" class="citations-panel">
-          <h3>Evidence Sources</h3>
+          <h3>{{ t('evidenceSources') }}</h3>
           <div v-for="(c, i) in answer.citations" :key="i" class="citation-card" @click="toggleCitation(i)">
             <div class="citation-header">
               <span class="citation-badge">FY{{ c.fiscal_year }}</span>
@@ -83,7 +84,7 @@
           </div>
           <table class="trend-table">
             <thead>
-              <tr><th>Fiscal Year</th><th>Value</th><th>YoY Change</th><th>YoY %</th></tr>
+              <tr><th>{{ t('fiscalYear') }}</th><th>{{ t('value') }}</th><th>{{ t('yoyChange') }}</th><th>{{ t('yoyPct') }}</th></tr>
             </thead>
             <tbody>
               <tr v-for="d in trendData.data" :key="d.fiscal_year">
@@ -99,20 +100,20 @@
         </div>
 
         <div v-if="!answer && !trendData && !loading" class="empty-state">
-          <h2>Apple 10-K Filing Intelligence</h2>
-          <p>Select an analysis scenario or ask a custom question to analyze Apple's SEC 10-K filings from 2020 to 2025.</p>
+          <h2>{{ t('emptyTitle') }}</h2>
+          <p>{{ t('emptyDesc') }}</p>
           <div class="capabilities">
             <div class="cap-item">
-              <strong>Narrative Q&A</strong>
-              <span>Business strategy, risk factors, management discussion</span>
+              <strong>{{ t('capNarrative') }}</strong>
+              <span>{{ t('capNarrativeDesc') }}</span>
             </div>
             <div class="cap-item">
-              <strong>Financial Metrics</strong>
-              <span>Revenue, margins, EPS with deterministic calculations</span>
+              <strong>{{ t('capMetrics') }}</strong>
+              <span>{{ t('capMetricsDesc') }}</span>
             </div>
             <div class="cap-item">
-              <strong>Cross-Year Comparison</strong>
-              <span>Compare risk themes, strategy shifts across years</span>
+              <strong>{{ t('capComparison') }}</strong>
+              <span>{{ t('capComparisonDesc') }}</span>
             </div>
           </div>
         </div>
@@ -122,20 +123,123 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import * as echarts from 'echarts'
 import { ask, getTrends, getSystemStatus, type AskResponse, type TrendsResponse } from './api/client'
 
-const scenarios = [
-  { icon: '📊', label: 'Business Overview', question: "What are Apple's main business segments and products as described in the most recent 10-K?" },
-  { icon: '⚠️', label: 'Key Risk Factors', question: "What are the most significant risk factors Apple disclosed in its 2025 10-K filing?" },
-  { icon: '💰', label: 'Revenue Analysis', question: "What was Apple's net sales and how did it change compared to the prior year?" },
-  { icon: '📈', label: 'Profitability Trends', question: "Compare Apple's gross margin and operating income trends from 2020 to 2025" },
-  { icon: '🌍', label: 'Tariff & Trade Impact', question: "How does Apple describe the impact of tariffs and trade restrictions in recent filings?" },
-  { icon: '🔬', label: 'R&D Investment', question: "How has Apple's research and development spending changed from 2020 to 2025?" },
-  { icon: '💵', label: 'Capital Return', question: "Summarize Apple's share repurchase and dividend activity across 2020-2025" },
-  { icon: '📱', label: 'Product Strategy', question: "How has Apple's product lineup evolved based on the Business section across multiple years?" },
-]
+type Locale = 'en' | 'zh'
+const locale = ref<Locale>((localStorage.getItem('locale') as Locale) || 'en')
+
+function toggleLang() {
+  locale.value = locale.value === 'en' ? 'zh' : 'en'
+  localStorage.setItem('locale', locale.value)
+}
+
+const i18n: Record<Locale, Record<string, string>> = {
+  en: {
+    subtitle: '2020–2025 SEC Filing Analysis',
+    systemReady: 'System Ready',
+    connecting: 'Connecting...',
+    analysisScenarios: 'Analysis Scenarios',
+    financialTrends: 'Financial Trends',
+    selectMetric: 'Select metric...',
+    customQuestion: 'Custom Question',
+    questionPlaceholder: "Ask about Apple's 10-K filings...",
+    analyzing: 'Analyzing...',
+    analyze: 'Analyze',
+    loadingText: 'Retrieving evidence and generating analysis...',
+    evidenceSources: 'Evidence Sources',
+    context: 'Context',
+    retrieval: 'Retrieval',
+    generation: 'Generation',
+    fiscalYear: 'Fiscal Year',
+    value: 'Value',
+    yoyChange: 'YoY Change',
+    yoyPct: 'YoY %',
+    emptyTitle: 'Apple 10-K Filing Intelligence',
+    emptyDesc: "Select an analysis scenario or ask a custom question to analyze Apple's SEC 10-K filings from 2020 to 2025.",
+    capNarrative: 'Narrative Q&A',
+    capNarrativeDesc: 'Business strategy, risk factors, management discussion',
+    capMetrics: 'Financial Metrics',
+    capMetricsDesc: 'Revenue, margins, EPS with deterministic calculations',
+    capComparison: 'Cross-Year Comparison',
+    capComparisonDesc: 'Compare risk themes, strategy shifts across years',
+    queryType_narrative: 'Narrative',
+    queryType_metric: 'Metric',
+    queryType_comparative: 'Comparative',
+    queryType_report: 'Report',
+    queryType_error: 'Error',
+    confidence_high: 'High confidence',
+    confidence_medium: 'Medium confidence',
+    confidence_low: 'Low confidence',
+  },
+  zh: {
+    subtitle: '2020–2025 SEC 年报分析',
+    systemReady: '系统就绪',
+    connecting: '连接中...',
+    analysisScenarios: '分析场景',
+    financialTrends: '财务趋势',
+    selectMetric: '选择指标...',
+    customQuestion: '自定义提问',
+    questionPlaceholder: '输入关于 Apple 10-K 年报的问题...',
+    analyzing: '分析中...',
+    analyze: '开始分析',
+    loadingText: '正在检索证据并生成分析...',
+    evidenceSources: '证据来源',
+    context: '上下文',
+    retrieval: '检索耗时',
+    generation: '生成耗时',
+    fiscalYear: '财年',
+    value: '数值',
+    yoyChange: '同比变化',
+    yoyPct: '同比 %',
+    emptyTitle: 'Apple 10-K 年报智能分析',
+    emptyDesc: '选择左侧分析场景，或输入自定义问题，分析 Apple 2020–2025 年 SEC 10-K 年报。',
+    capNarrative: '叙述型问答',
+    capNarrativeDesc: '业务战略、风险因素、管理层讨论',
+    capMetrics: '财务指标',
+    capMetricsDesc: '营收、利润率、EPS 确定性计算',
+    capComparison: '跨年对比',
+    capComparisonDesc: '风险主题、战略变化的多年比较',
+    queryType_narrative: '叙述型',
+    queryType_metric: '数值型',
+    queryType_comparative: '比较型',
+    queryType_report: '报告',
+    queryType_error: '错误',
+    confidence_high: '高置信度',
+    confidence_medium: '中置信度',
+    confidence_low: '低置信度',
+  },
+}
+
+function t(key: string): string {
+  return i18n[locale.value][key] ?? key
+}
+
+const scenariosData = {
+  en: [
+    { icon: '📊', label: 'Business Overview', question: "What are Apple's main business segments and products as described in the most recent 10-K?" },
+    { icon: '⚠️', label: 'Key Risk Factors', question: "What are the most significant risk factors Apple disclosed in its 2025 10-K filing?" },
+    { icon: '💰', label: 'Revenue Analysis', question: "What was Apple's net sales and how did it change compared to the prior year?" },
+    { icon: '📈', label: 'Profitability Trends', question: "Compare Apple's gross margin and operating income trends from 2020 to 2025" },
+    { icon: '🌍', label: 'Tariff & Trade Impact', question: "How does Apple describe the impact of tariffs and trade restrictions in recent filings?" },
+    { icon: '🔬', label: 'R&D Investment', question: "How has Apple's research and development spending changed from 2020 to 2025?" },
+    { icon: '💵', label: 'Capital Return', question: "Summarize Apple's share repurchase and dividend activity across 2020-2025" },
+    { icon: '📱', label: 'Product Strategy', question: "How has Apple's product lineup evolved based on the Business section across multiple years?" },
+  ],
+  zh: [
+    { icon: '📊', label: '业务概览', question: "What are Apple's main business segments and products as described in the most recent 10-K?" },
+    { icon: '⚠️', label: '关键风险因素', question: "What are the most significant risk factors Apple disclosed in its 2025 10-K filing?" },
+    { icon: '💰', label: '营收分析', question: "What was Apple's net sales and how did it change compared to the prior year?" },
+    { icon: '📈', label: '盈利趋势', question: "Compare Apple's gross margin and operating income trends from 2020 to 2025" },
+    { icon: '🌍', label: '关税与贸易影响', question: "How does Apple describe the impact of tariffs and trade restrictions in recent filings?" },
+    { icon: '🔬', label: '研发投入', question: "How has Apple's research and development spending changed from 2020 to 2025?" },
+    { icon: '💵', label: '资本回报', question: "Summarize Apple's share repurchase and dividend activity across 2020-2025" },
+    { icon: '📱', label: '产品策略', question: "How has Apple's product lineup evolved based on the Business section across multiple years?" },
+  ],
+}
+
+const localizedScenarios = computed(() => scenariosData[locale.value])
 
 const availableMetrics = ref<string[]>([
   'net_sales', 'gross_profit', 'operating_income', 'net_income',
@@ -228,7 +332,19 @@ function toggleCitation(idx: number) {
   expandedCitation.value = expandedCitation.value === idx ? null : idx
 }
 
+const metricNameZh: Record<string, string> = {
+  net_sales: '净营收', gross_profit: '毛利润', operating_income: '营业利润',
+  net_income: '净利润', eps_diluted: '稀释每股收益', rd_expense: '研发费用',
+  total_assets: '总资产', total_liabilities: '总负债', long_term_debt: '长期负债',
+  operating_cash_flow: '经营性现金流', share_repurchases: '股票回购',
+  cost_of_sales: '销售成本', income_before_tax: '税前利润',
+  eps_basic: '基本每股收益', sga_expense: '销售管理费用',
+  operating_expenses: '营业费用', total_equity: '股东权益',
+  cash_and_equivalents: '现金及等价物', capex: '资本支出', dividends_paid: '已付股息',
+}
+
 function formatMetricName(name: string): string {
+  if (locale.value === 'zh' && metricNameZh[name]) return metricNameZh[name]
   return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
@@ -270,7 +386,13 @@ function formatAnswer(text: string): string {
 }
 .header h1 { font-size: 18px; font-weight: 600; }
 .subtitle { font-size: 12px; color: #94a3b8; margin-left: 12px; }
-.header-right { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.header-right { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.lang-toggle {
+  padding: 3px 10px; border: 1px solid #475569; border-radius: 4px;
+  background: transparent; color: #cbd5e1; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+}
+.lang-toggle:hover { background: #1e293b; border-color: #94a3b8; color: white; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; }
 .status-dot.ok { background: var(--success); }
 .status-dot.err { background: var(--danger); }
