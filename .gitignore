@@ -1,0 +1,69 @@
+# Data processing artifacts
+data/processed/
+*.db
+*.faiss
+*.npy
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+python-service/models/*.bin
+python-service/models/*.onnx
+python-service/models/*.safetensors
+python-service/models/*/
+
+# Go
+go-backend/tmp/
+go-backend/bin/
+go-backend/server
+go-backend/vendor/
+
+# Node / Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Environment
+.env
+*.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+
+# Local config
+configs/app.local.yaml
+
+# Cursor
+.cursor/
+rules/
+
+# Duplicate raw data at project root
+/aapl_10k.json
+
+# Challenge PDF (not part of deliverable)
+技术挑战.pdf
+
+# Plan files
+*.plan.md
+
+# Debug logs
+debug-*.log
