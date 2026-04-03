@@ -1,5 +1,15 @@
 # AAPL 10-K Intelligence
 
+![Go](https://img.shields.io/badge/Go-1.21-00ADD8?logo=go&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)
+![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vuedotjs&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-FTS5-003B57?logo=sqlite&logoColor=white)
+![FAISS](https://img.shields.io/badge/FAISS-IndexFlatIP-FF6F00)
+![ECharts](https://img.shields.io/badge/ECharts-5-AA344D)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 An intelligent financial Q&A and analysis system for Apple Inc.'s SEC 10-K filings (FY2020–2025). Built with a Go control plane, Python data/model service, and Vue analyst workstation frontend.
 
 ## Architecture Overview
@@ -49,6 +59,13 @@ An intelligent financial Q&A and analysis system for Apple Inc.'s SEC 10-K filin
 
 ## Key Features
 
+### Multi-Turn Conversational Q&A
+
+- Modern chat-style UI with conversation history
+- Context-aware follow-up questions — conversation history passed to LLM for coherent multi-turn dialogue
+- Recommended question cards on welcome screen, tailored to 10-K analysis scenarios
+- Markdown-rendered answers with rich formatting (tables, lists, emphasis)
+
 ### Three Query Types
 
 | Type | Example | Pipeline |
@@ -65,6 +82,22 @@ An intelligent financial Q&A and analysis system for Apple Inc.'s SEC 10-K filin
 4. **Cross-Encoder Reranking**: BGE-reranker-base re-scores top candidates
 5. **LLM Generation**: Context-grounded answer with citations
 
+### Parameterized Report Generation
+
+Five built-in report templates with configurable parameters:
+
+| Report | Configurable Parameters |
+|--------|------------------------|
+| **Annual Financial Summary** | Fiscal year range, metrics to include (revenue, profitability, cash flow, per-share) |
+| **CAN SLIM Analysis** | Fiscal year range, analysis depth (summary / detailed) |
+| **Risk Factor Analysis** | Fiscal year range, risk categories (market, supply chain, regulatory, competitive, macro) |
+| **R&D Innovation Analysis** | Fiscal year range, analysis depth |
+| **Multi-Year Trend Analysis** | Fiscal year range, comparison metrics |
+
+- Parameters configure the LLM prompt dynamically for targeted analysis
+- ECharts trend charts embedded inline in generated reports
+- **PDF export**: download reports as multi-page PDF documents with charts, KPI cards, and analysis text
+
 ### Financial Data Integrity
 
 - **Deterministic metrics**: Revenue, margins, EPS from structured SQLite tables — not LLM-generated
@@ -72,28 +105,36 @@ An intelligent financial Q&A and analysis system for Apple Inc.'s SEC 10-K filin
 - **YoY & CAGR**: Calculated with pandas, not approximated by language models
 - **Full traceability**: Every answer cites specific chunks with fiscal year and section
 
+### Bilingual Support (EN / 中文)
+
+- One-click language toggle in the sidebar
+- Full UI localization (buttons, labels, recommended questions, report templates)
+- LLM responses follow the selected language — Chinese UI produces Chinese answers
+
 ### Analyst Workstation UI
 
-- Pre-built analysis scenarios (Business Overview, Risk Factors, Revenue Analysis, etc.)
+- Chat tab with multi-turn conversation and inline ECharts visualizations
+- Report tab with template selection → parameter configuration → generation workflow
 - Evidence panel with expandable citation cards showing source fiscal year and section
-- ECharts interactive financial trend charts with YoY and CAGR display
 - Debug panel showing retrieval pipeline metrics (FTS hits, dense hits, rerank scores, latency)
+- Real-time system health indicator
 
 ## Quick Start
 
 ### Prerequisites
 
 - Docker & Docker Compose
-- (Optional) Ollama with `qwen2.5:7b` model for LLM generation
+- (Optional) Ollama with `qwen2.5:7b` model for local LLM generation
 
 ### One-Click Launch
 
 ```bash
 # 1. Clone and enter the project
-git clone <repo-url> && cd WO_challenge
+git clone https://github.com/YuehaoDai/WO_challenge.git && cd WO_challenge
 
-# 2. (Optional) Configure LLM — edit .env for OpenAI API
+# 2. (Optional) Configure LLM — edit .env for OpenAI-compatible API
 cp .env.example .env
+# Edit .env to set LLM_PROVIDER=openai and your API key
 
 # 3. (Optional) Start Ollama with a model
 ollama pull qwen2.5:7b
@@ -109,6 +150,8 @@ Services will be available at:
 - **Frontend**: http://localhost:3000
 - **Go API**: http://localhost:8080
 - **Python Service**: http://localhost:8000
+
+> Ports are configurable via `.env` (`FRONTEND_PORT`, `GO_BACKEND_PORT`, `PYTHON_SERVICE_PORT`).
 
 ### Local Development (without Docker)
 
@@ -134,13 +177,18 @@ cd frontend && npm install && npm run dev
 ## API Reference
 
 ### POST /api/v1/ask
-Main Q&A endpoint. Classifies query, retrieves evidence, generates answer.
+Main Q&A endpoint. Classifies query, retrieves evidence, generates answer. Supports multi-turn conversation via `history` field.
 
 ```json
 {
   "question": "What was Apple's net revenue in 2025?",
   "symbol": "AAPL",
-  "top_k": 5
+  "top_k": 5,
+  "lang": "en",
+  "history": [
+    { "role": "user", "content": "Tell me about Apple's revenue" },
+    { "role": "assistant", "content": "Apple's net sales..." }
+  ]
 }
 ```
 
@@ -204,11 +252,12 @@ For institutional-scale deployment (1000+ companies), upgrade path:
 
 This system is designed with institutional financial research in mind:
 
-- **CAN SLIM Awareness**: Metrics include EPS (diluted), revenue growth, and return on equity — key CAN SLIM screening criteria
+- **CAN SLIM Awareness**: Metrics include EPS (diluted), revenue growth, and return on equity — key CAN SLIM screening criteria. A dedicated CAN SLIM report template provides structured analysis
 - **Evidence-Based Analysis**: Every answer traces back to specific 10-K sections, matching the audit trail expectations of institutional research
 - **Financial Statement Precision**: Structured metric extraction ensures numerical accuracy for analyst workflows
 - **Multi-Year Trend Analysis**: Built-in CAGR and YoY calculations support the fundamental analysis methodology used in institutional stock selection
 - **Scalable Architecture**: Control plane / data plane separation supports the volume requirements of institutional data processing
+- **Report Generation**: Parameterized report templates (Annual Summary, CAN SLIM, Risk Factors, R&D, Trends) with PDF export for analyst deliverables
 
 ## Project Structure
 
@@ -232,23 +281,28 @@ WO_challenge/
 │       ├── generate.py      # LLM generation (Ollama/OpenAI)
 │       ├── search.py        # FAISS search + metrics queries
 │       ├── schemas.py       # Pydantic models
-│       └── config.py        # Settings management
+│       └── config.py        # Settings (pydantic-settings v2)
 ├── frontend/                # Vue 3 + Vite + ECharts
 │   └── src/
-│       ├── App.vue          # Analyst workstation UI
-│       ├── api/client.ts    # API client
+│       ├── App.vue          # Chat + Report UI with i18n
+│       ├── api/client.ts    # Typed API client
 │       └── main.ts          # Entry point
 ├── scripts/                 # Data ingestion pipeline
 │   ├── ingest.py            # Master pipeline
 │   ├── chunker.py           # Intelligent chunking
 │   └── extract_metrics.py   # Financial statement parser
-├── configs/                 # Service configuration
+├── configs/                 # Go backend configuration
+│   ├── app.yaml             # Docker deployment config
+│   └── app.local.yaml       # Local development config
+├── .cursor/rules/           # Cursor AI coding guidelines
 ├── data/
 │   ├── raw/                 # Source 10-K JSON
 │   └── processed/           # SQLite, FAISS index, chunks JSONL
+├── .env.example             # Environment variable template
 ├── docker-compose.yml       # Multi-service orchestration
 ├── Dockerfile.ingest        # Ingestion container
-└── README.md
+├── README.md                # English documentation
+└── README_CN.md             # 中文文档
 ```
 
 ## Technology Stack
@@ -257,12 +311,13 @@ WO_challenge/
 |-----------|-----------|-----------|
 | API Gateway | Go + Gin | High-performance orchestration, native SQLite |
 | Model Service | Python + FastAPI | ML ecosystem, pandas for calculations |
-| Frontend | Vue 3 + Vite | Reactive UI, fast builds |
-| Visualization | ECharts | Financial-grade charting |
+| Frontend | Vue 3 + Vite + TypeScript | Reactive UI, type safety, fast builds |
+| Visualization | ECharts 5 | Financial-grade charting, inline in reports |
 | Vector Search | FAISS (IndexFlatIP) | Exact search for small dataset, no infra overhead |
 | Full-Text Search | SQLite FTS5 | BM25 with Porter stemming, zero-config |
 | Embeddings | BGE-small-en-v1.5 | Local, 384-dim, strong English performance |
 | Reranker | BGE-reranker-base | Cross-encoder for precision boost |
-| LLM | Ollama / OpenAI API | Flexible: local or cloud |
+| LLM | Ollama / OpenAI-compatible API | Flexible: local or cloud (DashScope, Kimi, etc.) |
+| PDF Export | jsPDF + html2canvas | Client-side multi-page report generation |
 | Database | SQLite | Embedded, single-file, portable |
 | Containerization | Docker Compose | One-click deployment |
