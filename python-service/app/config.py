@@ -1,11 +1,13 @@
 """Configuration management using pydantic-settings."""
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from functools import lru_cache
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     embedding_model: str = Field(default="BAAI/bge-small-en-v1.5")
     reranker_model: str = Field(default="BAAI/bge-reranker-base")
 
@@ -22,10 +24,6 @@ class Settings(BaseSettings):
     faiss_index_path: str = Field(default="/app/data/processed/faiss")
     db_path: str = Field(default="/app/data/processed/app.db")
     chunks_jsonl_path: str = Field(default="/app/data/processed/chunks.jsonl")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 @lru_cache()
