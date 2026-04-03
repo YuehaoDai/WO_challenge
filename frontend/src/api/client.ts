@@ -9,6 +9,7 @@ export interface AskRequest {
   question: string
   symbol?: string
   top_k?: number
+  lang?: string
 }
 
 export interface Citation {

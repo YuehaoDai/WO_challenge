@@ -40,34 +40,66 @@ def _get_model() -> str:
     return settings.ollama_model
 
 
-def _build_system_prompt(query_type: str) -> str:
-    base = (
-        "You are a financial research analyst assistant specializing in SEC 10-K filings analysis "
-        "for Apple Inc. (AAPL). You provide grounded, evidence-based answers using ONLY the "
-        "provided context from 10-K filings.\n\n"
-        "Rules:\n"
-        "- Base every claim on the provided evidence. Never fabricate data.\n"
-        "- Use precise financial terminology (net sales, diluted EPS, gross margin, etc.).\n"
-        "- When citing numbers, specify the fiscal year and source section.\n"
-        "- If the context is insufficient, say so explicitly rather than guessing.\n"
-        "- Keep answers concise and professional.\n"
-    )
+def _build_system_prompt(query_type: str, lang: str = "en") -> str:
+    if lang == "zh":
+        base = (
+            "你是一名专业的金融研究分析师助手，专注于 Apple Inc.（AAPL）的 SEC 10-K 年报分析。"
+            "你基于提供的 10-K 年报证据给出有据可查的回答。\n\n"
+            "规则：\n"
+            "- 每个论点都必须基于提供的证据，绝不编造数据。\n"
+            "- 使用精确的金融术语（净营收、稀释每股收益、毛利率等）。\n"
+            "- 引用数字时，标明对应的财年和来源章节。\n"
+            "- 如果证据不足，请明确说明而非猜测。\n"
+            "- 回答须简明专业。\n"
+            "- 使用 Markdown 格式组织回答（标题、列表、加粗等）。\n"
+            "- **必须使用中文回答。**\n"
+        )
+    else:
+        base = (
+            "You are a financial research analyst assistant specializing in SEC 10-K filings analysis "
+            "for Apple Inc. (AAPL). You provide grounded, evidence-based answers using ONLY the "
+            "provided context from 10-K filings.\n\n"
+            "Rules:\n"
+            "- Base every claim on the provided evidence. Never fabricate data.\n"
+            "- Use precise financial terminology (net sales, diluted EPS, gross margin, etc.).\n"
+            "- When citing numbers, specify the fiscal year and source section.\n"
+            "- If the context is insufficient, say so explicitly rather than guessing.\n"
+            "- Keep answers concise and professional.\n"
+            "- Use Markdown formatting to structure your answer (headings, lists, bold, etc.).\n"
+        )
 
     if query_type == "metric":
-        base += (
-            "\nFor financial metrics questions:\n"
-            "- Present numbers clearly with proper formatting.\n"
-            "- Include year-over-year comparisons when data is available.\n"
-            "- Explain the significance of the metric in context.\n"
-        )
+        if lang == "zh":
+            base += (
+                "\n针对财务指标类问题：\n"
+                "- 清晰展示数字，使用合适的格式。\n"
+                "- 在数据可用时进行同比对比。\n"
+                "- 解释该指标在上下文中的意义。\n"
+            )
+        else:
+            base += (
+                "\nFor financial metrics questions:\n"
+                "- Present numbers clearly with proper formatting.\n"
+                "- Include year-over-year comparisons when data is available.\n"
+                "- Explain the significance of the metric in context.\n"
+            )
     elif query_type in ("comparative", "report"):
-        base += (
-            "\nFor comparative/report questions:\n"
-            "- Structure your answer with clear sections.\n"
-            "- Highlight key differences across years.\n"
-            "- Identify trends and patterns.\n"
-            "- Support each point with specific evidence from the filings.\n"
-        )
+        if lang == "zh":
+            base += (
+                "\n针对比较/报告类问题：\n"
+                "- 使用清晰的章节结构组织回答。\n"
+                "- 重点突出不同年份之间的关键差异。\n"
+                "- 识别趋势和模式。\n"
+                "- 用年报中的具体证据支撑每个观点。\n"
+            )
+        else:
+            base += (
+                "\nFor comparative/report questions:\n"
+                "- Structure your answer with clear sections.\n"
+                "- Highlight key differences across years.\n"
+                "- Identify trends and patterns.\n"
+                "- Support each point with specific evidence from the filings.\n"
+            )
 
     return base
 
@@ -91,14 +123,14 @@ def _build_user_prompt(question: str, context: list[dict]) -> str:
     )
 
 
-async def generate(question: str, context: list[dict], query_type: str = "narrative") -> dict:
+async def generate(question: str, context: list[dict], query_type: str = "narrative", lang: str = "en") -> dict:
     """Generate a grounded answer using LLM."""
     if _client is None:
         init_client()
 
     model = _get_model()
     settings = get_settings()
-    system_prompt = _build_system_prompt(query_type)
+    system_prompt = _build_system_prompt(query_type, lang)
     user_prompt = _build_user_prompt(question, context)
 
     response = await _client.chat.completions.create(
@@ -130,14 +162,14 @@ async def generate(question: str, context: list[dict], query_type: str = "narrat
     }
 
 
-async def generate_stream(question: str, context: list[dict], query_type: str = "narrative") -> AsyncGenerator[str, None]:
+async def generate_stream(question: str, context: list[dict], query_type: str = "narrative", lang: str = "en") -> AsyncGenerator[str, None]:
     """Stream-generate a grounded answer using LLM via SSE."""
     if _client is None:
         init_client()
 
     model = _get_model()
     settings = get_settings()
-    system_prompt = _build_system_prompt(query_type)
+    system_prompt = _build_system_prompt(query_type, lang)
     user_prompt = _build_user_prompt(question, context)
 
     stream = await _client.chat.completions.create(

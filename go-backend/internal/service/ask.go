@@ -91,7 +91,7 @@ func (s *AskService) handleRetrievalQuery(ctx context.Context, req *dto.AskReque
 	}
 
 	genStart := time.Now()
-	genResp, err := s.client.Generate(ctx, req.Question, contextChunks, string(queryType))
+	genResp, err := s.client.Generate(ctx, req.Question, contextChunks, string(queryType), req.Lang)
 	if err != nil {
 		s.logger.Error("generation failed, returning retrieval results only", zap.Error(err))
 		citations := make([]dto.Citation, 0, len(results))

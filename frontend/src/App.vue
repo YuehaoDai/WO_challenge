@@ -125,7 +125,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import * as echarts from 'echarts'
+import { marked } from 'marked'
 import { ask, getTrends, getSystemStatus, type AskResponse, type TrendsResponse } from './api/client'
+
+marked.setOptions({ breaks: true, gfm: true })
 
 type Locale = 'en' | 'zh'
 const locale = ref<Locale>((localStorage.getItem('locale') as Locale) || 'en')
@@ -271,7 +274,7 @@ async function askQuestion(question: string) {
   trendData.value = null
   expandedCitation.value = null
   try {
-    answer.value = await ask({ question })
+    answer.value = await ask({ question, lang: locale.value })
   } catch (e: any) {
     answer.value = {
       query_type: 'error', answer: `Error: ${e.message || 'Request failed'}`,
@@ -356,10 +359,7 @@ function formatValue(val: number, unit: string): string {
 }
 
 function formatAnswer(text: string): string {
-  return text
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n/g, '<br>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+  return marked.parse(text) as string
 }
 </script>
 
@@ -446,7 +446,18 @@ function formatAnswer(text: string): string {
 .confidence-badge.low { background: #fee2e2; color: #991b1b; }
 .timing { font-size: 12px; color: var(--text-secondary); margin-left: auto; }
 .answer-body { font-size: 14px; line-height: 1.7; }
-.answer-body p { margin-bottom: 8px; }
+.answer-body p { margin-bottom: 10px; }
+.answer-body h1, .answer-body h2, .answer-body h3, .answer-body h4 { margin: 16px 0 8px; font-weight: 600; }
+.answer-body h2 { font-size: 17px; } .answer-body h3 { font-size: 15px; }
+.answer-body ul, .answer-body ol { padding-left: 20px; margin-bottom: 10px; }
+.answer-body li { margin-bottom: 4px; }
+.answer-body table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+.answer-body th, .answer-body td { padding: 6px 10px; border: 1px solid var(--border); text-align: left; }
+.answer-body th { background: var(--bg); font-weight: 600; }
+.answer-body code { background: #f1f5f9; padding: 1px 5px; border-radius: 3px; font-size: 13px; }
+.answer-body pre { background: #f1f5f9; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 10px 0; }
+.answer-body pre code { background: none; padding: 0; }
+.answer-body blockquote { border-left: 3px solid var(--primary); padding-left: 12px; margin: 10px 0; color: var(--text-secondary); }
 
 .debug-bar { display: flex; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text-secondary); flex-wrap: wrap; }
 

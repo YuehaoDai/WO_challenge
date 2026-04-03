@@ -15,6 +15,7 @@ type AskRequest struct {
 	Symbol   string `json:"symbol"`
 	TopK     int    `json:"top_k"`
 	Stream   bool   `json:"stream"`
+	Lang     string `json:"lang"`
 }
 
 type AskResponse struct {
@@ -111,6 +112,7 @@ type GenerateRequest struct {
 	Context   []map[string]interface{} `json:"context"`
 	QueryType string                   `json:"query_type"`
 	Stream    bool                     `json:"stream"`
+	Lang      string                   `json:"lang,omitempty"`
 }
 
 type GenerateResponse struct {

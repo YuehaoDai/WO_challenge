@@ -66,6 +66,7 @@ class GenerateRequest(BaseModel):
     context: list[dict] = Field(..., description="List of {id, fiscal_year, section_title, text} evidence chunks")
     query_type: str = Field(default="narrative", description="narrative | metric | comparative | report")
     stream: bool = Field(default=False)
+    lang: str = Field(default="en", description="Response language: en | zh")
 
 
 class Citation(BaseModel):
