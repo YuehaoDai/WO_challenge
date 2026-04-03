@@ -579,7 +579,9 @@ watch(reportChartData, () => { nextTick(() => renderReportChart()) })
 
 <style>
 *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif; }
+html { color-scheme: dark; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif; background: #0a0f1a; color: #f1f5f9; }
+button, input, textarea, select { color: inherit; font: inherit; }
 
 :root {
   --bg-base: #0a0f1a;
@@ -589,7 +591,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
   --glass-blur: 20px;
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-muted: #7d8ba6;
   --accent: #3b82f6;
   --accent-cyan: #06b6d4;
   --accent-gradient: linear-gradient(135deg, #3b82f6, #06b6d4);
@@ -628,7 +630,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
   font-size: 10px; transition: all 0.2s;
 }
 .nav-tab svg { width: 22px; height: 22px; }
-.nav-tab:hover { color: var(--text-secondary); background: var(--bg-elevated); }
+.nav-tab:hover { color: var(--text-primary); background: var(--bg-elevated); }
 .nav-tab.active { color: var(--accent); background: rgba(59,130,246,0.12); }
 
 .nav-action {
@@ -670,8 +672,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 }
 .suggestion-card:hover { border-color: var(--accent); box-shadow: 0 0 24px rgba(59,130,246,0.1); transform: translateY(-1px); }
 .suggestion-icon { font-size: 20px; }
-.suggestion-label { font-size: 13px; font-weight: 600; }
-.suggestion-tag { font-size: 11px; color: var(--text-muted); }
+.suggestion-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.suggestion-tag { font-size: 11px; color: var(--text-secondary); }
 
 /* Messages */
 .msg { display: flex; max-width: 800px; width: 100%; margin: 0 auto; }
@@ -734,9 +736,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 .chip {
   padding: 6px 14px; border-radius: 20px; font-size: 12px;
   background: var(--bg-surface); border: 1px solid var(--glass-border);
-  color: var(--text-secondary); cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  color: var(--text-primary); cursor: pointer; transition: all 0.2s; white-space: nowrap;
 }
-.chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.06); }
+.chip:hover { border-color: var(--accent); color: #93c5fd; background: rgba(59,130,246,0.1); }
 
 /* Loading */
 .loading-card { display: flex; align-items: center; gap: 12px; padding: 16px 20px; }
@@ -798,8 +800,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI'
 }
 .template-card:hover { border-color: var(--accent); box-shadow: 0 0 24px rgba(59,130,246,0.1); transform: translateY(-2px); }
 .template-icon { font-size: 28px; }
-.template-name { font-size: 15px; font-weight: 600; }
-.template-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+.template-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.template-desc { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
 
 .report-content { max-width: 850px; margin: 0 auto; }
 .back-btn {
