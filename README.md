@@ -323,3 +323,29 @@ WO_challenge/
 | PDF Export | jsPDF + html2canvas | Client-side multi-page report generation |
 | Database | SQLite | Embedded, single-file, portable |
 | Containerization | Docker Compose | One-click deployment |
+
+## Development Process
+
+This project was built with **[Cursor](https://cursor.com/)** — an AI-powered IDE. The entire development process was a human-AI collaboration where the author directed architecture, design decisions, and quality control while Cursor assisted with code generation and implementation.
+
+### What I (the author) did
+
+- **System Architecture Design**: Defined the three-service separation (Go control plane + Python data plane + Vue frontend), chose the RAG pipeline topology, and decided on the technology stack with clear rationale for each component (FAISS over Milvus, SQLite FTS5 over Elasticsearch, etc.)
+- **Requirements & Domain Analysis**: Studied the 10-K filing structure, identified the three query types (narrative / metric / comparative), designed the financial metrics extraction schema (38 metrics × 6 fiscal years), and tailored the system for William O'Neil + Co.'s CAN SLIM methodology
+- **Prompt Engineering & LLM Tuning**: Designed the system prompts for different query types and languages, tuned retrieval parameters (top_k, RRF k, rerank thresholds), and iteratively debugged LLM output quality (e.g., "missing data" claims resolved by increasing context chunks)
+- **UI/UX Direction**: Defined the chat-style interaction model, specified the report template system with configurable parameters, chose the light theme for readability, and directed the OpenClaw-inspired design aesthetic
+- **Debugging & Production Hardening**: Diagnosed cross-service issues (pydantic-settings v2 config loading bug, Go HTTP client timeout cascades, Docker healthcheck race conditions), increased observability, and tuned timeouts for real-world LLM latency
+- **Quality Assurance & Iteration**: Reviewed all generated code, caught and corrected issues (unreadable dark theme, dead config files, missing i18n keys), and drove multiple rounds of refinement based on hands-on testing
+- **DevOps & Delivery**: Managed git history with conventional commits, structured the Docker Compose deployment, and maintained documentation parity across EN/CN
+
+### What Cursor (AI) did
+
+- Generated implementation code across Go, Python, and Vue/TypeScript based on architectural specifications
+- Scaffolded boilerplate (Dockerfiles, API schemas, Pydantic models, Gin handlers)
+- Implemented detailed features (ECharts integration, PDF export, warm-up banner, i18n system)
+- Executed refactoring tasks (UI redesign, theme switch, multi-turn conversation support)
+- Assisted with debugging by instrumenting services and analyzing log output
+
+### Reflection
+
+AI-assisted development dramatically accelerated implementation — the working system was built in roughly 48 hours. However, the critical differentiators remain human: **architecture decisions** that determine long-term maintainability, **domain knowledge** that shapes what the system actually does, and **taste** that catches when something doesn't look right or doesn't work well. The AI excels at translating well-specified intent into code; the human's job is to provide that intent with precision and to validate the output relentlessly.
