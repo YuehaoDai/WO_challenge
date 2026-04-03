@@ -5,11 +5,17 @@ const api = axios.create({
   timeout: 120000,
 })
 
+export interface HistoryMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export interface AskRequest {
   question: string
   symbol?: string
   top_k?: number
   lang?: string
+  history?: HistoryMessage[]
 }
 
 export interface Citation {

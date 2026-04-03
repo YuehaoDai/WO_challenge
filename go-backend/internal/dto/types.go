@@ -10,12 +10,18 @@ const (
 	QueryReport      QueryType = "report"
 )
 
+type HistoryMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
 type AskRequest struct {
-	Question string `json:"question" binding:"required,min=1"`
-	Symbol   string `json:"symbol"`
-	TopK     int    `json:"top_k"`
-	Stream   bool   `json:"stream"`
-	Lang     string `json:"lang"`
+	Question string           `json:"question" binding:"required,min=1"`
+	Symbol   string           `json:"symbol"`
+	TopK     int              `json:"top_k"`
+	Stream   bool             `json:"stream"`
+	Lang     string           `json:"lang"`
+	History  []HistoryMessage `json:"history,omitempty"`
 }
 
 type AskResponse struct {
@@ -113,6 +119,7 @@ type GenerateRequest struct {
 	QueryType string                   `json:"query_type"`
 	Stream    bool                     `json:"stream"`
 	Lang      string                   `json:"lang,omitempty"`
+	History   []HistoryMessage         `json:"history,omitempty"`
 }
 
 type GenerateResponse struct {

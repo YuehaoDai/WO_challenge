@@ -123,7 +123,18 @@ def _build_user_prompt(question: str, context: list[dict]) -> str:
     )
 
 
-async def generate(question: str, context: list[dict], query_type: str = "narrative", lang: str = "en") -> dict:
+def _build_messages(system_prompt: str, user_prompt: str, history: list | None = None) -> list[dict]:
+    messages = [{"role": "system", "content": system_prompt}]
+    if history:
+        for h in history[-6:]:
+            role = h.role if hasattr(h, 'role') else h.get('role', 'user')
+            content = h.content if hasattr(h, 'content') else h.get('content', '')
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_prompt})
+    return messages
+
+
+async def generate(question: str, context: list[dict], query_type: str = "narrative", lang: str = "en", history: list | None = None) -> dict:
     """Generate a grounded answer using LLM."""
     if _client is None:
         init_client()
@@ -135,10 +146,7 @@ async def generate(question: str, context: list[dict], query_type: str = "narrat
 
     response = await _client.chat.completions.create(
         model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=_build_messages(system_prompt, user_prompt, history),
         temperature=settings.llm_temperature,
         max_tokens=settings.llm_max_tokens,
     )
@@ -162,7 +170,7 @@ async def generate(question: str, context: list[dict], query_type: str = "narrat
     }
 
 
-async def generate_stream(question: str, context: list[dict], query_type: str = "narrative", lang: str = "en") -> AsyncGenerator[str, None]:
+async def generate_stream(question: str, context: list[dict], query_type: str = "narrative", lang: str = "en", history: list | None = None) -> AsyncGenerator[str, None]:
     """Stream-generate a grounded answer using LLM via SSE."""
     if _client is None:
         init_client()
@@ -174,10 +182,7 @@ async def generate_stream(question: str, context: list[dict], query_type: str = 
 
     stream = await _client.chat.completions.create(
         model=model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
+        messages=_build_messages(system_prompt, user_prompt, history),
         temperature=settings.llm_temperature,
         max_tokens=settings.llm_max_tokens,
         stream=True,

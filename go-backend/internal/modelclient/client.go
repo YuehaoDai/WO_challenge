@@ -85,13 +85,14 @@ func (c *Client) Rerank(ctx context.Context, query string, docs []dto.RerankDocu
 	return &resp, nil
 }
 
-func (c *Client) Generate(ctx context.Context, question string, contextChunks []map[string]interface{}, queryType string, lang string) (*dto.GenerateResponse, error) {
+func (c *Client) Generate(ctx context.Context, question string, contextChunks []map[string]interface{}, queryType string, lang string, history []dto.HistoryMessage) (*dto.GenerateResponse, error) {
 	req := dto.GenerateRequest{
 		Question:  question,
 		Context:   contextChunks,
 		QueryType: queryType,
 		Stream:    false,
 		Lang:      lang,
+		History:   history,
 	}
 	var resp dto.GenerateResponse
 	if err := c.doJSON(ctx, "POST", "/generate", req, &resp); err != nil {

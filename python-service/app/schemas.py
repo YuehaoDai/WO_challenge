@@ -59,6 +59,10 @@ class DenseSearchResponse(BaseModel):
     results: list[SearchResult]
 
 
+class HistoryMessage(BaseModel):
+    role: str
+    content: str
+
 class GenerateRequest(BaseModel):
     model_config = ConfigDict(strict=True, extra="forbid")
 
@@ -67,6 +71,7 @@ class GenerateRequest(BaseModel):
     query_type: str = Field(default="narrative", description="narrative | metric | comparative | report")
     stream: bool = Field(default=False)
     lang: str = Field(default="en", description="Response language: en | zh")
+    history: list[HistoryMessage] = Field(default_factory=list, description="Conversation history for multi-turn")
 
 
 class Citation(BaseModel):

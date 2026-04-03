@@ -124,13 +124,14 @@ async def dense_search(req: DenseSearchRequest):
 
 @app.post("/generate", response_model=GenerateResponse)
 async def generate_answer(req: GenerateRequest):
+    history = req.history if req.history else None
     if req.stream:
         return StreamingResponse(
-            generate.generate_stream(req.question, req.context, req.query_type, req.lang),
+            generate.generate_stream(req.question, req.context, req.query_type, req.lang, history),
             media_type="text/event-stream",
         )
     try:
-        result = await generate.generate(req.question, req.context, req.query_type, req.lang)
+        result = await generate.generate(req.question, req.context, req.query_type, req.lang, history)
         return GenerateResponse(**result)
     except Exception as e:
         logger.error("Generation failed: %s", e)
@@ -139,8 +140,9 @@ async def generate_answer(req: GenerateRequest):
 
 @app.post("/generate/stream")
 async def generate_stream(req: GenerateRequest):
+    history = req.history if req.history else None
     return StreamingResponse(
-        generate.generate_stream(req.question, req.context, req.query_type, req.lang),
+        generate.generate_stream(req.question, req.context, req.query_type, req.lang, history),
         media_type="text/event-stream",
     )
 
