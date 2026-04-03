@@ -26,6 +26,27 @@
     </aside>
 
     <main class="main-area">
+      <!-- ==================== WARM-UP BANNER ==================== -->
+      <Transition name="banner-slide">
+        <div v-if="systemOk && !modelsReady" class="warmup-banner">
+          <div class="warmup-icon">
+            <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          </div>
+          <div class="warmup-text">
+            <strong>{{ t('warmupTitle') }}</strong>
+            <span>{{ t('warmupDetail') }}</span>
+          </div>
+          <div class="warmup-chips">
+            <span class="warmup-chip" :class="embeddingReady ? 'ready' : 'loading'">
+              {{ t('warmupEmbedding') }}: {{ embeddingReady ? t('warmupReady') : t('warmupLoading') }}
+            </span>
+            <span class="warmup-chip" :class="rerankerReady ? 'ready' : 'loading'">
+              {{ t('warmupReranker') }}: {{ rerankerReady ? t('warmupReady') : t('warmupLoading') }}
+            </span>
+          </div>
+        </div>
+      </Transition>
+
       <!-- ==================== CHAT VIEW ==================== -->
       <div v-if="activeTab === 'chat'" class="chat-view">
         <div class="messages-container" ref="messagesRef">
@@ -293,6 +314,10 @@ const i18n: Record<Locale, Record<string, string>> = {
     downloadPdf: 'Download PDF', trendChart: 'Financial Trends', trendTable: 'Detailed Data', fiscalYear: 'Fiscal Year',
     configDesc: 'Configure report parameters below, then generate.',
     generateBtn: 'Generate Report', exportingPdf: 'Exporting PDF...',
+    warmupTitle: 'Models loading',
+    warmupDetail: 'Some features may be limited while ML models are initializing.',
+    warmupEmbedding: 'Embedding', warmupReranker: 'Reranker',
+    warmupReady: 'ready', warmupLoading: 'loading',
   },
   zh: {
     chat: '对话', report: '报告', newChat: '新对话', systemReady: '在线', connecting: '连接中',
@@ -307,6 +332,10 @@ const i18n: Record<Locale, Record<string, string>> = {
     downloadPdf: '下载 PDF', trendChart: '财务趋势', trendTable: '详细数据', fiscalYear: '财政年度',
     configDesc: '请在下方配置报告参数，然后点击生成。',
     generateBtn: '生成报告', exportingPdf: '正在导出 PDF...',
+    warmupTitle: '模型加载中',
+    warmupDetail: 'ML 模型正在初始化，部分功能暂时受限。',
+    warmupEmbedding: '向量化模型', warmupReranker: '重排序模型',
+    warmupReady: '就绪', warmupLoading: '加载中',
   },
 }
 function t(k: string) { return i18n[locale.value][k] ?? k }
@@ -384,6 +413,10 @@ const messages = ref<ChatMessage[]>([])
 const inputText = ref('')
 const loading = ref(false)
 const systemOk = ref(false)
+const modelsReady = ref(true)
+const embeddingReady = ref(true)
+const rerankerReady = ref(true)
+let warmupPollTimer: ReturnType<typeof setInterval> | null = null
 const messagesRef = ref<HTMLElement | null>(null)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 const showTrendPicker = ref(false)
@@ -406,8 +439,30 @@ let msgCounter = 0
 function uid() { return `msg-${Date.now()}-${msgCounter++}` }
 
 // ─── Chat actions ───────────────────────────────────────────────
+async function pollSystemStatus() {
+  try {
+    const status = await getSystemStatus()
+    systemOk.value = true
+    modelsReady.value = status.models_ready
+    embeddingReady.value = status.embedding_ready
+    rerankerReady.value = status.reranker_ready
+    if (status.models_ready && warmupPollTimer) {
+      clearInterval(warmupPollTimer)
+      warmupPollTimer = null
+    }
+  } catch {
+    systemOk.value = false
+    modelsReady.value = false
+    embeddingReady.value = false
+    rerankerReady.value = false
+  }
+}
+
 onMounted(async () => {
-  try { await getSystemStatus(); systemOk.value = true } catch { systemOk.value = false }
+  await pollSystemStatus()
+  if (!modelsReady.value) {
+    warmupPollTimer = setInterval(pollSystemStatus, 5000)
+  }
 })
 
 function buildHistory(): HistoryMessage[] {
@@ -954,6 +1009,39 @@ button, input, textarea, select { color: inherit; font: inherit; }
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
+
+/* ─── Warm-up Banner ──────────────────────────────── */
+.warmup-banner {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 20px;
+  background: linear-gradient(90deg, #fef3c7, #fde68a);
+  border-bottom: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 13px;
+  flex-shrink: 0;
+  z-index: 20;
+}
+.warmup-icon { display: flex; align-items: center; }
+.warmup-icon .spinner {
+  width: 20px; height: 20px; color: #d97706;
+  animation: warmup-spin 1.5s linear infinite;
+}
+@keyframes warmup-spin { to { transform: rotate(360deg); } }
+.warmup-text { display: flex; flex-direction: column; gap: 1px; }
+.warmup-text strong { font-size: 13px; color: #78350f; }
+.warmup-text span { font-size: 12px; color: #92400e; }
+.warmup-chips { display: flex; gap: 8px; margin-left: auto; }
+.warmup-chip {
+  padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+  white-space: nowrap;
+}
+.warmup-chip.ready { background: #dcfce7; color: #166534; }
+.warmup-chip.loading { background: #fef9c3; color: #854d0e; animation: warmup-pulse 1.5s ease-in-out infinite; }
+@keyframes warmup-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+.banner-slide-enter-active, .banner-slide-leave-active { transition: all 0.4s ease; }
+.banner-slide-enter-from, .banner-slide-leave-to { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; overflow: hidden; }
+.banner-slide-enter-to, .banner-slide-leave-from { opacity: 1; max-height: 60px; }
 
 /* ─── Nav Rail ─────────────────────────────────── */
 .nav-rail {

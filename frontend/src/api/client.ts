@@ -62,6 +62,10 @@ export interface SystemStatus {
   status: string
   go_backend: string
   python_service: string
+  models_ready: boolean
+  embedding_ready: boolean
+  reranker_ready: boolean
+  llm_provider: string
   chunks_count: number
   metrics_count: number
   fiscal_years: number[]

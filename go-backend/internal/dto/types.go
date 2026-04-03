@@ -139,10 +139,14 @@ type SectionInfo struct {
 }
 
 type SystemStatus struct {
-	Status        string `json:"status"`
-	GoBackend     string `json:"go_backend"`
-	PythonService string `json:"python_service"`
-	ChunksCount   int    `json:"chunks_count"`
-	MetricsCount  int    `json:"metrics_count"`
-	FiscalYears   []int  `json:"fiscal_years"`
+	Status         string `json:"status"`
+	GoBackend      string `json:"go_backend"`
+	PythonService  string `json:"python_service"`
+	ModelsReady    bool   `json:"models_ready"`
+	EmbeddingReady bool   `json:"embedding_ready"`
+	RerankerReady  bool   `json:"reranker_ready"`
+	LLMProvider    string `json:"llm_provider"`
+	ChunksCount    int    `json:"chunks_count"`
+	MetricsCount   int    `json:"metrics_count"`
+	FiscalYears    []int  `json:"fiscal_years"`
 }

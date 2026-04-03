@@ -140,18 +140,45 @@ func (h *Handler) SystemStatus(c *gin.Context) {
 	chunks, metrics, years := h.fts.GetCounts()
 
 	pythonStatus := "ok"
-	_, err := h.client.Health(c.Request.Context())
+	modelsReady := true
+	embeddingReady := true
+	rerankerReady := true
+	llmProvider := ""
+
+	healthResp, err := h.client.Health(c.Request.Context())
 	if err != nil {
 		pythonStatus = "unavailable"
+		modelsReady = false
+		embeddingReady = false
+		rerankerReady = false
+	} else {
+		if s, ok := healthResp["status"].(string); ok && s == "warming_up" {
+			pythonStatus = "warming_up"
+			modelsReady = false
+		}
+		if v, ok := healthResp["embedding_ready"].(bool); ok {
+			embeddingReady = v
+		}
+		if v, ok := healthResp["reranker_ready"].(bool); ok {
+			rerankerReady = v
+		}
+		if v, ok := healthResp["llm_provider"].(string); ok {
+			llmProvider = v
+		}
+		modelsReady = embeddingReady && rerankerReady
 	}
 
 	c.JSON(http.StatusOK, dto.SystemStatus{
-		Status:        "ok",
-		GoBackend:     "ok",
-		PythonService: pythonStatus,
-		ChunksCount:   chunks,
-		MetricsCount:  metrics,
-		FiscalYears:   years,
+		Status:         "ok",
+		GoBackend:      "ok",
+		PythonService:  pythonStatus,
+		ModelsReady:    modelsReady,
+		EmbeddingReady: embeddingReady,
+		RerankerReady:  rerankerReady,
+		LLMProvider:    llmProvider,
+		ChunksCount:    chunks,
+		MetricsCount:   metrics,
+		FiscalYears:    years,
 	})
 }
 
