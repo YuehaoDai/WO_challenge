@@ -56,6 +56,7 @@
 - BGE-small（384 维）在英文金融文本上性价比优秀
 - 交叉编码器重排序显著提升相关性（precision@5 提升约 20%）
 - 首次运行时通过 HuggingFace 自动下载
+- **可配置**：在 `.env` 中设置 `EMBEDDING_MODEL` / `RERANKER_MODEL`，支持 HuggingFace Hub ID 或本地路径，适用于离线部署或自定义模型（参见 `.env.example`）
 
 ## 核心特性
 
@@ -132,9 +133,10 @@
 # 1. 克隆并进入项目
 git clone https://github.com/YuehaoDai/WO_challenge.git && cd WO_challenge
 
-# 2.（可选）配置 LLM —— 编辑 .env 设置 OpenAI 兼容 API
+# 2.（可选）配置 LLM 和模型 —— 编辑 .env
 cp .env.example .env
 # 编辑 .env 设置 LLM_PROVIDER=openai 和 API 密钥
+# 也可设置 EMBEDDING_MODEL / RERANKER_MODEL 为本地路径以支持离线使用
 
 # 3.（可选）启动 Ollama 并拉取模型
 ollama pull qwen2.5:7b
@@ -315,8 +317,8 @@ WO_challenge/
 | 可视化 | ECharts 5 | 金融级图表，可内嵌到报告 |
 | 向量检索 | FAISS (IndexFlatIP) | 小数据集精确搜索，零基础设施开销 |
 | 全文检索 | SQLite FTS5 | BM25 + Porter 词干，零配置 |
-| 向量化 | BGE-small-en-v1.5 | 本地模型，384 维，英文表现优异 |
-| 重排序 | BGE-reranker-base | 交叉编码器提升精度 |
+| 向量化 | BGE-small-en-v1.5 | 本地模型，384 维，通过 `EMBEDDING_MODEL` 可配置 |
+| 重排序 | BGE-reranker-base | 交叉编码器，通过 `RERANKER_MODEL` 可配置 |
 | LLM | Ollama / OpenAI 兼容 API | 灵活切换：本地或云端（DashScope、Kimi 等） |
 | PDF 导出 | jsPDF + html2canvas | 客户端多页报告生成 |
 | 数据库 | SQLite | 嵌入式，单文件，可移植 |

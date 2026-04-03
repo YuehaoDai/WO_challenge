@@ -56,6 +56,7 @@ An intelligent financial Q&A and analysis system for Apple Inc.'s SEC 10-K filin
 - BGE-small (384 dim) offers excellent quality-to-size ratio for English financial text
 - Cross-encoder reranker significantly improves relevance (precision@5 boost of ~20%)
 - Models auto-download on first run via HuggingFace
+- **Configurable**: set `EMBEDDING_MODEL` / `RERANKER_MODEL` in `.env` to any HuggingFace Hub ID or a local filesystem path for offline/custom models (see `.env.example`)
 
 ## Key Features
 
@@ -132,9 +133,10 @@ Five built-in report templates with configurable parameters:
 # 1. Clone and enter the project
 git clone https://github.com/YuehaoDai/WO_challenge.git && cd WO_challenge
 
-# 2. (Optional) Configure LLM — edit .env for OpenAI-compatible API
+# 2. (Optional) Configure LLM and models — edit .env
 cp .env.example .env
 # Edit .env to set LLM_PROVIDER=openai and your API key
+# You can also set EMBEDDING_MODEL / RERANKER_MODEL to a local path for offline use
 
 # 3. (Optional) Start Ollama with a model
 ollama pull qwen2.5:7b
@@ -315,8 +317,8 @@ WO_challenge/
 | Visualization | ECharts 5 | Financial-grade charting, inline in reports |
 | Vector Search | FAISS (IndexFlatIP) | Exact search for small dataset, no infra overhead |
 | Full-Text Search | SQLite FTS5 | BM25 with Porter stemming, zero-config |
-| Embeddings | BGE-small-en-v1.5 | Local, 384-dim, strong English performance |
-| Reranker | BGE-reranker-base | Cross-encoder for precision boost |
+| Embeddings | BGE-small-en-v1.5 | Local, 384-dim, configurable via `EMBEDDING_MODEL` |
+| Reranker | BGE-reranker-base | Cross-encoder, configurable via `RERANKER_MODEL` |
 | LLM | Ollama / OpenAI-compatible API | Flexible: local or cloud (DashScope, Kimi, etc.) |
 | PDF Export | jsPDF + html2canvas | Client-side multi-page report generation |
 | Database | SQLite | Embedded, single-file, portable |
