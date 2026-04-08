@@ -16,7 +16,13 @@ def load_model(model_name: str) -> None:
     if _model is not None and _model_name == model_name:
         return
     logger.info("Loading reranker model: %s", model_name)
-    _model = CrossEncoder(model_name)
+    try:
+        _model = CrossEncoder(model_name)
+    except Exception as e:
+        logger.warning("Online load failed (%s), retrying from local cache...", type(e).__name__)
+        import os
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        _model = CrossEncoder(model_name)
     _model_name = model_name
     logger.info("Reranker model loaded")
 

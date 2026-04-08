@@ -24,7 +24,7 @@ for p in [str(PROJECT_ROOT / "python-service"), str(PROJECT_ROOT), str(SCRIPT_DI
         sys.path.insert(0, p)
 
 from app.config import Settings
-from app import embedding
+from app import embedding, rerank
 
 from scripts.chunker import chunk_sections
 from scripts.extract_metrics import extract_all_metrics
@@ -229,6 +229,10 @@ def main():
     logger.info("--- Step 6: Build FAISS Index ---")
     settings = Settings()
     build_faiss_index(chunks, settings.embedding_model)
+
+    logger.info("--- Step 7: Pre-download reranker model ---")
+    reranker_model = os.environ.get("RERANKER_MODEL", "BAAI/bge-reranker-base")
+    rerank.load_model(reranker_model)
 
     logger.info("=== Ingestion complete ===")
 

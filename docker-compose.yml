@@ -9,6 +9,7 @@ services:
       - model-cache:/root/.cache
     environment:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+      - RERANKER_MODEL=${RERANKER_MODEL:-BAAI/bge-reranker-base}
       - DB_PATH=/app/data/processed/app.db
       - FAISS_INDEX_PATH=/app/data/processed/faiss
 
@@ -22,6 +23,7 @@ services:
     ports:
       - "${PYTHON_SERVICE_PORT:-8000}:8000"
     environment:
+      - HF_HUB_OFFLINE=1
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
       - RERANKER_MODEL=${RERANKER_MODEL:-BAAI/bge-reranker-base}
       - LLM_PROVIDER=${LLM_PROVIDER:-ollama}

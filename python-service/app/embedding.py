@@ -16,7 +16,13 @@ def load_model(model_name: str) -> None:
     if _model is not None and _model_name == model_name:
         return
     logger.info("Loading embedding model: %s", model_name)
-    _model = SentenceTransformer(model_name)
+    try:
+        _model = SentenceTransformer(model_name)
+    except Exception as e:
+        logger.warning("Online load failed (%s), retrying from local cache...", type(e).__name__)
+        import os
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        _model = SentenceTransformer(model_name)
     _model_name = model_name
     logger.info("Embedding model loaded. Dimension: %d", _model.get_sentence_embedding_dimension())
 
