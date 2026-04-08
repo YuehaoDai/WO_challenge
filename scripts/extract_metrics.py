@@ -167,7 +167,8 @@ def extract_metrics_from_section(section: dict) -> list[dict]:
 
         # Normalize signs for certain metrics
         if metric_name in ("cost_of_sales", "operating_expenses", "income_tax",
-                          "dividends_paid", "share_repurchases", "capex"):
+                          "dividends_paid", "share_repurchases", "capex",
+                          "rd_expense", "sga_expense"):
             value = abs(value)
 
         unit = _determine_unit(value, label)
