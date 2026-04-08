@@ -779,71 +779,96 @@ function buildReportPrompt(): { question: string; metrics: string[] } {
   const id = activeReport.value!
   const ys = paramValues.year_start
   const ye = paramValues.year_end
+  const zh = locale.value === 'zh'
 
   switch (id) {
     case 'annual': {
       const focusNames = (paramValues.focus_metrics as string[]).map(m => fmtMetric(m)).join(', ')
-      const depth = paramValues.depth === 'summary' ? 'concise executive summary (300-400 words)' : 'detailed analysis (800-1200 words)'
+      const depth = paramValues.depth === 'summary'
+        ? (zh ? '简明高管摘要（300-400字）' : 'concise executive summary (300-400 words)')
+        : (zh ? '详细分析报告（800-1200字）' : 'detailed analysis (800-1200 words)')
       return {
         metrics: paramValues.focus_metrics as string[],
-        question: `Provide a ${depth} of Apple Inc.'s (AAPL) financial performance from FY${ys} to FY${ye} based on SEC 10-K filings. Focus on these key metrics: ${focusNames}. Cover: 1) Revenue and growth trajectory, 2) Profitability trends, 3) Key highlights and inflection points, 4) Year-over-year changes and CAGR where applicable. Use specific figures from the filings.`,
+        question: zh
+          ? `基于 SEC 10-K 年报，提供苹果公司（AAPL）FY${ys} 至 FY${ye} 的${depth}。重点分析以下指标：${focusNames}。涵盖：1) 营收与增长轨迹，2) 盈利能力趋势，3) 关键亮点与转折点，4) 同比变化及复合年增长率（CAGR）。请引用年报中的具体数据。`
+          : `Provide a ${depth} of Apple Inc.'s (AAPL) financial performance from FY${ys} to FY${ye} based on SEC 10-K filings. Focus on these key metrics: ${focusNames}. Cover: 1) Revenue and growth trajectory, 2) Profitability trends, 3) Key highlights and inflection points, 4) Year-over-year changes and CAGR where applicable. Use specific figures from the filings.`,
       }
     }
     case 'risk': {
+      const catLocale = zh ? 'zh' : 'en'
       const categories = (paramValues.risk_categories as string[]).map(c => {
         const opt = reportParamDefs.risk[1].options?.find(o => o.value === c)
-        return opt ? opt.label.en : c
+        return opt ? opt.label[catLocale] : c
       }).join(', ')
       const evolution = paramValues.evolution === 'yes'
-        ? `Compare how these risks have evolved across FY${ys} to FY${ye}, noting new risks that appeared or risks that were removed.`
-        : `Focus on the most recent fiscal year (FY${ye}) 10-K filing.`
+        ? (zh ? `对比 FY${ys} 至 FY${ye} 期间这些风险的演变情况，指出新增或移除的风险。` : `Compare how these risks have evolved across FY${ys} to FY${ye}, noting new risks that appeared or risks that were removed.`)
+        : (zh ? `重点分析最近的 FY${ye} 年报。` : `Focus on the most recent fiscal year (FY${ye}) 10-K filing.`)
       return {
         metrics: ['net_sales', 'operating_income'],
-        question: `Analyze Apple's (AAPL) risk factors as disclosed in Item 1A of the 10-K filings (FY${ys}–FY${ye}). Focus on these categories: ${categories}. ${evolution} For each risk category: 1) Summarize the key risks disclosed, 2) Assess severity and likelihood, 3) Note any mitigating factors Apple mentions. Provide specific quotes or references from the filings where relevant.`,
+        question: zh
+          ? `分析苹果公司（AAPL）10-K 年报（FY${ys}–FY${ye}）中 Item 1A 披露的风险因素。重点类别：${categories}。${evolution} 对每个风险类别：1) 总结披露的主要风险，2) 评估严重程度和可能性，3) 指出苹果提及的缓解措施。尽可能引用年报原文。`
+          : `Analyze Apple's (AAPL) risk factors as disclosed in Item 1A of the 10-K filings (FY${ys}–FY${ye}). Focus on these categories: ${categories}. ${evolution} For each risk category: 1) Summarize the key risks disclosed, 2) Assess severity and likelihood, 3) Note any mitigating factors Apple mentions. Provide specific quotes or references from the filings where relevant.`,
       }
     }
     case 'profit': {
       const marginNames = (paramValues.margin_metrics as string[]).map(m => fmtMetric(m)).join(', ')
       const drivers = paramValues.include_drivers === 'yes'
-        ? 'For each margin shift, explain the underlying drivers (product mix, cost structure, pricing, R&D allocation, etc.) citing specific 10-K disclosures from Item 7 MD&A.'
+        ? (zh ? '对每个利润率变动，结合 Item 7 MD&A 中的具体披露，解释背后的驱动因素（产品组合、成本结构、定价策略、研发投入等）。' : 'For each margin shift, explain the underlying drivers (product mix, cost structure, pricing, R&D allocation, etc.) citing specific 10-K disclosures from Item 7 MD&A.')
         : ''
       return {
         metrics: paramValues.margin_metrics as string[],
-        question: `Analyze Apple's (AAPL) profitability from FY${ys} to FY${ye} based on 10-K filings. Key metrics: ${marginNames}. Cover: 1) Gross margin evolution and cost structure, 2) Operating margin trends, 3) Net margin and bottom-line performance, 4) Segment-level profitability insights if available. ${drivers} Calculate margin percentages where data is available.`,
+        question: zh
+          ? `基于 10-K 年报，分析苹果公司（AAPL）FY${ys} 至 FY${ye} 的盈利能力。关键指标：${marginNames}。涵盖：1) 毛利率演变与成本结构，2) 营业利润率趋势，3) 净利润率与净利表现，4) 可用的分部盈利分析。${drivers} 在数据可用时计算利润率百分比。`
+          : `Analyze Apple's (AAPL) profitability from FY${ys} to FY${ye} based on 10-K filings. Key metrics: ${marginNames}. Cover: 1) Gross margin evolution and cost structure, 2) Operating margin trends, 3) Net margin and bottom-line performance, 4) Segment-level profitability insights if available. ${drivers} Calculate margin percentages where data is available.`,
       }
     }
     case 'rnd': {
       const compMetrics = (paramValues.comparison as string[]).map(m => fmtMetric(m)).join(', ')
-      const strategy = paramValues.strategy_focus === 'product' ? 'product innovation and hardware/software integration'
-        : paramValues.strategy_focus === 'platform' ? 'platform ecosystem and services growth'
-        : 'both product innovation and platform/services strategy'
+      const strategy = paramValues.strategy_focus === 'product'
+        ? (zh ? '产品创新与软硬件整合' : 'product innovation and hardware/software integration')
+        : paramValues.strategy_focus === 'platform'
+          ? (zh ? '平台生态与服务增长' : 'platform ecosystem and services growth')
+          : (zh ? '产品创新与平台/服务战略' : 'both product innovation and platform/services strategy')
       return {
         metrics: ['rd_expense', ...(paramValues.comparison as string[])],
-        question: `Analyze Apple's (AAPL) R&D spending and innovation strategy from FY${ys} to FY${ye}. Compare R&D expense against: ${compMetrics}. Focus on ${strategy}. Cover: 1) R&D spending trend and growth rate, 2) R&D as percentage of revenue (R&D intensity), 3) What the 10-K MD&A sections reveal about strategic priorities, 4) How R&D investment correlates with product launches and revenue growth. Use specific figures from Item 7 and Item 8.`,
+        question: zh
+          ? `分析苹果公司（AAPL）FY${ys} 至 FY${ye} 的研发支出与创新战略。将研发费用与以下指标对比：${compMetrics}。聚焦于${strategy}。涵盖：1) 研发支出趋势及增长率，2) 研发占营收比（研发强度），3) 10-K MD&A 章节中揭示的战略重点，4) 研发投入与产品发布及营收增长的关联。请引用 Item 7 和 Item 8 的具体数据。`
+          : `Analyze Apple's (AAPL) R&D spending and innovation strategy from FY${ys} to FY${ye}. Compare R&D expense against: ${compMetrics}. Focus on ${strategy}. Cover: 1) R&D spending trend and growth rate, 2) R&D as percentage of revenue (R&D intensity), 3) What the 10-K MD&A sections reveal about strategic priorities, 4) How R&D investment correlates with product launches and revenue growth. Use specific figures from Item 7 and Item 8.`,
       }
     }
     case 'brief': {
       const framework = paramValues.framework
+      const areaLocale = zh ? 'zh' : 'en'
       const areas = (paramValues.focus_areas as string[]).map(a => {
         const opt = reportParamDefs.brief[2].options?.find(o => o.value === a)
-        return opt ? opt.label.en : a
+        return opt ? opt.label[areaLocale] : a
       }).join(', ')
-      const length = paramValues.depth === 'brief' ? 'concise one-page brief (500 words max)' : 'detailed investment report (1000-1500 words)'
+      const length = paramValues.depth === 'brief'
+        ? (zh ? '简明单页简报（不超过500字）' : 'concise one-page brief (500 words max)')
+        : (zh ? '详细投资研究报告（1000-1500字）' : 'detailed investment report (1000-1500 words)')
       let frameworkInstr = ''
       if (framework === 'canslim') {
-        frameworkInstr = "Structure the analysis using William O'Neil's CAN SLIM framework: C (Current quarterly earnings), A (Annual earnings growth), N (New products/management/highs), S (Supply and demand), L (Leader or laggard), I (Institutional sponsorship), M (Market direction). Apply each factor to AAPL's 10-K data."
+        frameworkInstr = zh
+          ? "按照 William O'Neil 的 CAN SLIM 框架组织分析：C（当季盈利）、A（年度盈利增长）、N（新产品/管理层/新高）、S（供需关系）、L（领导者还是落后者）、I（机构持仓）、M（市场方向）。将每个因子应用于 AAPL 的 10-K 数据。"
+          : "Structure the analysis using William O'Neil's CAN SLIM framework: C (Current quarterly earnings), A (Annual earnings growth), N (New products/management/highs), S (Supply and demand), L (Leader or laggard), I (Institutional sponsorship), M (Market direction). Apply each factor to AAPL's 10-K data."
       } else if (framework === 'fundamental') {
-        frameworkInstr = 'Use fundamental analysis structure: Business Quality, Financial Health, Valuation Context, Growth Drivers, Risk Assessment.'
+        frameworkInstr = zh
+          ? '使用基本面分析结构：商业质量、财务健康、估值背景、增长驱动力、风险评估。'
+          : 'Use fundamental analysis structure: Business Quality, Financial Health, Valuation Context, Growth Drivers, Risk Assessment.'
       } else {
-        frameworkInstr = "Combine fundamental analysis with William O'Neil's CAN SLIM lens where applicable."
+        frameworkInstr = zh
+          ? "将基本面分析与 William O'Neil 的 CAN SLIM 视角相结合。"
+          : "Combine fundamental analysis with William O'Neil's CAN SLIM lens where applicable."
       }
       return {
         metrics: ['net_sales', 'net_income', 'eps_diluted', 'operating_cash_flow'],
-        question: `Create a ${length} for Apple Inc. (AAPL) based on 10-K filings from FY${ys} to FY${ye}. ${frameworkInstr} Focus areas: ${areas}. Include: specific financial figures, growth rates, and CAGR calculations. End with a clear investment thesis summary. Cite specific 10-K sections.`,
+        question: zh
+          ? `基于 FY${ys} 至 FY${ye} 的 10-K 年报，为苹果公司（AAPL）生成一份${length}。${frameworkInstr} 重点领域：${areas}。要求：包含具体财务数据、增长率和 CAGR 计算。最后给出明确的投资论点总结。引用具体的 10-K 章节。`
+          : `Create a ${length} for Apple Inc. (AAPL) based on 10-K filings from FY${ys} to FY${ye}. ${frameworkInstr} Focus areas: ${areas}. Include: specific financial figures, growth rates, and CAGR calculations. End with a clear investment thesis summary. Cite specific 10-K sections.`,
       }
     }
     default:
-      return { metrics: ['net_sales'], question: `Analyze Apple's 10-K filings from FY${ys} to FY${ye}.` }
+      return { metrics: ['net_sales'], question: zh ? `分析苹果公司 FY${ys} 至 FY${ye} 的 10-K 年报。` : `Analyze Apple's 10-K filings from FY${ys} to FY${ye}.` }
   }
 }
 
