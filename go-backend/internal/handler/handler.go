@@ -1,9 +1,14 @@
 package handler
 
 import (
+	"bufio"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -58,13 +63,135 @@ func (h *Handler) AskStream(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.askService.Ask(c.Request.Context(), &req)
+	if req.Symbol == "" {
+		req.Symbol = "AAPL"
+	}
+
+	sc, err := h.askService.PrepareStreamContext(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.logger.Error("stream retrieval failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process question"})
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	genStart := time.Now()
+
+	pyResp, err := h.client.GenerateStream(
+		c.Request.Context(), req.Question, sc.ContextChunks,
+		string(sc.QueryType), req.Lang, req.History,
+	)
+	if err != nil {
+		h.logger.Error("stream generation request failed", zap.Error(err))
+		h.writeSSE(c, "error", map[string]string{"message": "LLM service unavailable"})
+		return
+	}
+	defer pyResp.Body.Close()
+
+	if pyResp.StatusCode >= 400 {
+		body, _ := io.ReadAll(pyResp.Body)
+		h.logger.Error("python stream error", zap.Int("status", pyResp.StatusCode), zap.String("body", string(body)))
+		h.writeSSE(c, "error", map[string]string{"message": "LLM service error"})
+		return
+	}
+
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+	c.Writer.WriteHeaderNow()
+
+	metaEvent := map[string]interface{}{
+		"type":       "metadata",
+		"query_type": string(sc.QueryType),
+		"confidence": sc.Confidence,
+		"debug":      sc.Debug,
+	}
+	h.writeSSE(c, "metadata", metaEvent)
+
+	citationsSent := false
+
+	scanner := bufio.NewScanner(pyResp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		payload := line[6:]
+
+		var evt map[string]interface{}
+		if err := json.Unmarshal([]byte(payload), &evt); err != nil {
+			continue
+		}
+
+		evtType, _ := evt["type"].(string)
+		switch evtType {
+		case "token":
+			h.writeSSE(c, "token", evt)
+
+		case "cited_indices":
+			// Python parsed the LLM answer and tells us which evidence was actually cited
+			filteredCitations := h.filterCitationsByIndices(sc.Citations, evt["indices"])
+			citEvent := map[string]interface{}{
+				"type":      "citations",
+				"citations": filteredCitations,
+			}
+			h.writeSSE(c, "citations", citEvent)
+			citationsSent = true
+
+		case "done":
+			if !citationsSent {
+				citEvent := map[string]interface{}{
+					"type":      "citations",
+					"citations": sc.Citations,
+				}
+				h.writeSSE(c, "citations", citEvent)
+			}
+
+			genMs := time.Since(genStart).Milliseconds()
+			sc.Debug.GenerationMs = genMs
+			sc.Debug.TotalMs += genMs
+			doneEvent := map[string]interface{}{
+				"type":  "done",
+				"debug": sc.Debug,
+			}
+			h.writeSSE(c, "done", doneEvent)
+			return
+		}
+	}
+}
+
+// filterCitationsByIndices returns only the citations at the given 1-based indices.
+func (h *Handler) filterCitationsByIndices(allCitations []dto.Citation, rawIndices interface{}) []dto.Citation {
+	indices, ok := rawIndices.([]interface{})
+	if !ok || len(indices) == 0 {
+		return allCitations
+	}
+
+	filtered := make([]dto.Citation, 0, len(indices))
+	for _, raw := range indices {
+		idx, ok := raw.(float64) // JSON numbers decode as float64
+		if !ok {
+			continue
+		}
+		i := int(idx) - 1 // convert 1-based to 0-based
+		if i >= 0 && i < len(allCitations) {
+			filtered = append(filtered, allCitations[i])
+		}
+	}
+
+	if len(filtered) == 0 {
+		return allCitations
+	}
+	return filtered
+}
+
+func (h *Handler) writeSSE(c *gin.Context, event string, data interface{}) {
+	jsonBytes, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(c.Writer, "event: %s\ndata: %s\n\n", event, string(jsonBytes))
+	c.Writer.Flush()
 }
 
 func (h *Handler) Metrics(c *gin.Context) {

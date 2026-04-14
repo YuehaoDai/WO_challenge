@@ -51,6 +51,102 @@ func (s *AskService) handleMetricQuery(ctx context.Context, req *dto.AskRequest,
 	return s.handleRetrievalQuery(ctx, req, queryType, years, totalStart)
 }
 
+// StreamContext holds retrieval results needed by the handler to initiate SSE streaming.
+type StreamContext struct {
+	QueryType     dto.QueryType
+	Confidence    string
+	ContextChunks []map[string]interface{}
+	Citations     []dto.Citation
+	Debug         dto.DebugInfo
+}
+
+// PrepareStreamContext runs classification and retrieval, then returns everything
+// the handler needs to proxy a streaming generation request to Python.
+func (s *AskService) PrepareStreamContext(ctx context.Context, req *dto.AskRequest) (*StreamContext, error) {
+	totalStart := time.Now()
+
+	queryType, years, _ := classifier.Classify(req.Question)
+	s.logger.Info("classified query (stream)",
+		zap.String("type", string(queryType)),
+		zap.Ints("years", years),
+		zap.String("question", req.Question),
+	)
+
+	retrievalStart := time.Now()
+
+	var yearFilter *int
+	if len(years) == 1 {
+		yearFilter = &years[0]
+	}
+
+	topK := s.cfg.ContextTopK
+	if req.TopK > 0 {
+		topK = req.TopK
+	}
+
+	results, ftsHits, denseHits, rrfCount, rerankCount, err := s.retriever.Search(
+		ctx, req.Question,
+		s.cfg.FTSTopK, s.cfg.DenseTopK, s.cfg.RerankTopK,
+		yearFilter,
+	)
+	if err != nil {
+		s.logger.Error("retrieval failed (stream)", zap.Error(err))
+		return nil, err
+	}
+
+	retrievalMs := time.Since(retrievalStart).Milliseconds()
+
+	if len(results) > topK {
+		results = results[:topK]
+	}
+
+	contextChunks := make([]map[string]interface{}, 0, len(results))
+	citations := make([]dto.Citation, 0, len(results))
+	for i, r := range results {
+		contextChunks = append(contextChunks, map[string]interface{}{
+			"id":            r.ID,
+			"fiscal_year":   r.FiscalYear,
+			"section_title": r.SectionTitle,
+			"text":          r.Content,
+		})
+		snippet := r.Content
+		if len(snippet) > 200 {
+			snippet = snippet[:200] + "..."
+		}
+		citations = append(citations, dto.Citation{
+			ChunkID:       r.ID,
+			FiscalYear:    r.FiscalYear,
+			SectionTitle:  r.SectionTitle,
+			Snippet:       snippet,
+			EvidenceIndex: i + 1,
+		})
+	}
+
+	confidence := "high"
+	if len(results) <= 1 {
+		confidence = "low"
+	} else if len(results) <= 3 {
+		confidence = "medium"
+	}
+
+	return &StreamContext{
+		QueryType:     queryType,
+		Confidence:    confidence,
+		ContextChunks: contextChunks,
+		Citations:     citations,
+		Debug: dto.DebugInfo{
+			QueryType:     string(queryType),
+			RetrievalMs:   retrievalMs,
+			FTSHits:       ftsHits,
+			DenseHits:     denseHits,
+			AfterRRF:      rrfCount,
+			AfterRerank:   rerankCount,
+			ContextChunks: len(results),
+			TotalMs:       time.Since(totalStart).Milliseconds(),
+		},
+	}, nil
+}
+
 func (s *AskService) handleRetrievalQuery(ctx context.Context, req *dto.AskRequest, queryType dto.QueryType, years []int, totalStart time.Time) (*dto.AskResponse, error) {
 	retrievalStart := time.Now()
 
@@ -95,16 +191,17 @@ func (s *AskService) handleRetrievalQuery(ctx context.Context, req *dto.AskReque
 	if err != nil {
 		s.logger.Error("generation failed, returning retrieval results only", zap.Error(err))
 		citations := make([]dto.Citation, 0, len(results))
-		for _, r := range results {
+		for i, r := range results {
 			snippet := r.Content
 			if len(snippet) > 200 {
 				snippet = snippet[:200] + "..."
 			}
 			citations = append(citations, dto.Citation{
-				ChunkID:      r.ID,
-				FiscalYear:   r.FiscalYear,
-				SectionTitle: r.SectionTitle,
-				Snippet:      snippet,
+				ChunkID:       r.ID,
+				FiscalYear:    r.FiscalYear,
+				SectionTitle:  r.SectionTitle,
+				Snippet:       snippet,
+				EvidenceIndex: i + 1,
 			})
 		}
 		return &dto.AskResponse{

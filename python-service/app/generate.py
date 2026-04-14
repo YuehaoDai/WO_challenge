@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import AsyncGenerator
 
 import httpx
@@ -48,7 +49,8 @@ def _build_system_prompt(query_type: str, lang: str = "en") -> str:
             "规则：\n"
             "- 每个论点都必须基于提供的证据，绝不编造数据。\n"
             "- 使用精确的金融术语（净营收、稀释每股收益、毛利率等）。\n"
-            "- 引用数字时，标明对应的财年和来源章节。\n"
+            "- 引用证据时，使用 [Evidence N] 格式标注来源（如 [Evidence 1]、[Evidence 3]），"
+            "只引用你实际使用的证据。\n"
             "- 如果证据不足，请明确说明而非猜测。\n"
             "- 回答须简明专业。\n"
             "- 使用 Markdown 格式组织回答（标题、列表、加粗等）。\n"
@@ -62,7 +64,8 @@ def _build_system_prompt(query_type: str, lang: str = "en") -> str:
             "Rules:\n"
             "- Base every claim on the provided evidence. Never fabricate data.\n"
             "- Use precise financial terminology (net sales, diluted EPS, gross margin, etc.).\n"
-            "- When citing numbers, specify the fiscal year and source section.\n"
+            "- When citing evidence, use [Evidence N] tags to reference specific sources "
+            "(e.g., [Evidence 1], [Evidence 3]). Only cite evidence you actually use.\n"
             "- If the context is insufficient, say so explicitly rather than guessing.\n"
             "- Keep answers concise and professional.\n"
             "- Use Markdown formatting to structure your answer (headings, lists, bold, etc.).\n"
@@ -134,6 +137,44 @@ def _build_messages(system_prompt: str, user_prompt: str, history: list | None =
     return messages
 
 
+def _extract_cited_indices(text: str, num_chunks: int) -> list[int]:
+    """Extract 1-based evidence indices that the LLM actually cited.
+
+    Looks for [Evidence N] patterns. Returns sorted list of valid indices.
+    If none found, returns all indices (fail-open to avoid losing citations
+    when the LLM doesn't follow the citation format).
+    """
+    patterns = [
+        r'\[Evidence\s+(\d+)\]',
+        r'\[证据\s*(\d+)\]',
+    ]
+    cited: set[int] = set()
+    for pattern in patterns:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            idx = int(match.group(1))
+            if 1 <= idx <= num_chunks:
+                cited.add(idx)
+    if not cited:
+        return list(range(1, num_chunks + 1))
+    return sorted(cited)
+
+
+def _build_filtered_citations(context: list[dict], cited_indices: list[int]) -> list[dict]:
+    """Build citation dicts for only the cited evidence indices (1-based)."""
+    citations = []
+    for idx in cited_indices:
+        chunk = context[idx - 1]
+        snippet = chunk.get("text", "")[:200]
+        citations.append({
+            "chunk_id": chunk.get("id", ""),
+            "fiscal_year": chunk.get("fiscal_year", 0),
+            "section_title": chunk.get("section_title", ""),
+            "snippet": snippet,
+            "evidence_index": idx,
+        })
+    return citations
+
+
 async def generate(question: str, context: list[dict], query_type: str = "narrative", lang: str = "en", history: list | None = None) -> dict:
     """Generate a grounded answer using LLM."""
     if _client is None:
@@ -153,15 +194,8 @@ async def generate(question: str, context: list[dict], query_type: str = "narrat
 
     answer = response.choices[0].message.content or ""
 
-    citations = []
-    for chunk in context:
-        snippet = chunk.get("text", "")[:200]
-        citations.append({
-            "chunk_id": chunk.get("id", ""),
-            "fiscal_year": chunk.get("fiscal_year", 0),
-            "section_title": chunk.get("section_title", ""),
-            "snippet": snippet,
-        })
+    cited_indices = _extract_cited_indices(answer, len(context))
+    citations = _build_filtered_citations(context, cited_indices)
 
     return {
         "answer": answer,
@@ -188,21 +222,13 @@ async def generate_stream(question: str, context: list[dict], query_type: str = 
         stream=True,
     )
 
-    citations = []
-    for chunk in context:
-        snippet = chunk.get("text", "")[:200]
-        citations.append({
-            "chunk_id": chunk.get("id", ""),
-            "fiscal_year": chunk.get("fiscal_year", 0),
-            "section_title": chunk.get("section_title", ""),
-            "snippet": snippet,
-        })
-
-    yield f"data: {json.dumps({'type': 'citations', 'citations': citations})}\n\n"
-
+    accumulated_text = ""
     async for chunk in stream:
         delta = chunk.choices[0].delta
         if delta.content:
+            accumulated_text += delta.content
             yield f"data: {json.dumps({'type': 'token', 'content': delta.content})}\n\n"
 
+    cited_indices = _extract_cited_indices(accumulated_text, len(context))
+    yield f"data: {json.dumps({'type': 'cited_indices', 'indices': cited_indices})}\n\n"
     yield f"data: {json.dumps({'type': 'done', 'model': model})}\n\n"

@@ -75,7 +75,11 @@
                   <span class="badge conf" :class="msg.confidence">{{ t('cf_' + msg.confidence) }}</span>
                   <span class="msg-timing" v-if="msg.debug?.total_time_ms">{{ msg.debug.total_time_ms }}ms</span>
                 </div>
-                <div class="msg-body markdown-body" v-html="renderMd(msg.content)"></div>
+                <div v-if="!msg.content && loading && idx === messages.length - 1" class="loading-card">
+                  <div class="typing-dots"><span></span><span></span><span></span></div>
+                  <span class="loading-text">{{ t('analyzing') }}</span>
+                </div>
+                <div v-else class="msg-body markdown-body" :class="{ 'streaming': loading && idx === messages.length - 1 }" v-html="renderMd(msg.content)"></div>
 
                 <!-- Inline ECharts -->
                 <div v-if="msg.trendData" class="msg-chart-wrap">
@@ -87,6 +91,7 @@
                 <details v-if="msg.citations?.length" class="msg-citations">
                   <summary>{{ t('evidenceSources') }} ({{ msg.citations.length }})</summary>
                   <div v-for="(c, ci) in msg.citations" :key="ci" class="cite-item">
+                    <span v-if="c.evidence_index" class="cite-idx">[Evidence {{ c.evidence_index }}]</span>
                     <span class="cite-fy">FY{{ c.fiscal_year }}</span>
                     <span class="cite-section">{{ c.section_title }}</span>
                     <p class="cite-text">{{ c.snippet }}</p>
@@ -114,8 +119,8 @@
             </div>
           </template>
 
-          <!-- Loading indicator -->
-          <div v-if="loading" class="msg assistant">
+          <!-- Loading indicator for non-streaming operations (e.g. initial load) -->
+          <div v-if="loading && messages.length > 0 && messages[messages.length - 1].role === 'user'" class="msg assistant">
             <div class="msg-assistant-card glass-card loading-card">
               <div class="typing-dots"><span></span><span></span><span></span></div>
               <span class="loading-text">{{ t('analyzing') }}</span>
@@ -291,7 +296,7 @@ import * as echarts from 'echarts'
 import { marked } from 'marked'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
-import { ask, getTrends, getSystemStatus, type AskResponse, type TrendsResponse, type Citation, type HistoryMessage } from './api/client'
+import { ask, askStream, getTrends, getSystemStatus, type AskResponse, type TrendsResponse, type Citation, type HistoryMessage } from './api/client'
 
 marked.setOptions({ breaks: true, gfm: true })
 
@@ -485,30 +490,60 @@ async function sendMessage(text: string) {
   scrollToBottom()
   loading.value = true
 
-  try {
-    const history = buildHistory().slice(0, -1)
-    const resp = await ask({ question: q, lang: locale.value, history })
-    const assistantMsg: ChatMessage = {
-      id: uid(), role: 'assistant', content: resp.answer, timestamp: Date.now(),
-      queryType: resp.query_type, citations: resp.citations, debug: resp.debug, confidence: resp.confidence,
-    }
+  const assistantMsg: ChatMessage = {
+    id: uid(), role: 'assistant', content: '', timestamp: Date.now(),
+  }
+  messages.value.push(assistantMsg)
+  const msgIdx = messages.value.length - 1
 
-    if (resp.query_type === 'metric' || resp.query_type === 'comparative') {
-      const metric = detectMetric(q)
-      if (metric) {
-        try {
-          const td = await getTrends(metric)
-          assistantMsg.trendData = td
-        } catch { /* trend is optional */ }
+  let streamFailed = false
+
+  try {
+    const history = buildHistory().slice(0, -2)
+    await askStream({ question: q, lang: locale.value, history }, {
+      onMetadata(data) {
+        messages.value[msgIdx].queryType = data.query_type
+        messages.value[msgIdx].confidence = data.confidence
+        messages.value[msgIdx].debug = data.debug
+      },
+      onCitations(citations) {
+        messages.value[msgIdx].citations = citations
+      },
+      onToken(content) {
+        messages.value[msgIdx].content += content
+        scrollToBottom()
+      },
+      onDone(debug) {
+        if (debug) {
+          messages.value[msgIdx].debug = debug
+        }
+      },
+      onError(message) {
+        streamFailed = true
+        messages.value[msgIdx].content = `Error: ${message}`
+        messages.value[msgIdx].queryType = 'error'
+        messages.value[msgIdx].confidence = 'low'
+      },
+    })
+
+    if (!streamFailed) {
+      const qt = messages.value[msgIdx].queryType
+      if (qt === 'metric' || qt === 'comparative') {
+        const metric = detectMetric(q)
+        if (metric) {
+          try {
+            const td = await getTrends(metric)
+            messages.value[msgIdx].trendData = td
+          } catch { /* trend is optional */ }
+        }
       }
     }
-
-    messages.value.push(assistantMsg)
   } catch (e: any) {
-    messages.value.push({
-      id: uid(), role: 'assistant', content: `Error: ${e.message || 'Request failed'}`, timestamp: Date.now(),
-      queryType: 'error', confidence: 'low',
-    })
+    if (!messages.value[msgIdx].content) {
+      messages.value[msgIdx].content = `Error: ${e.message || 'Request failed'}`
+      messages.value[msgIdx].queryType = 'error'
+      messages.value[msgIdx].confidence = 'low'
+    }
   } finally {
     loading.value = false
     await nextTick()
@@ -1170,6 +1205,16 @@ button, input, textarea, select { color: inherit; font: inherit; }
 .markdown-body pre code { background: none; padding: 0; }
 .markdown-body blockquote { border-left: 3px solid var(--accent); padding-left: 14px; margin: 12px 0; color: var(--text-secondary); }
 
+/* Streaming cursor */
+.markdown-body.streaming::after {
+  content: '▍';
+  display: inline;
+  animation: cursor-blink 1s step-end infinite;
+  color: var(--accent);
+  font-weight: 300;
+}
+@keyframes cursor-blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+
 /* Inline chart */
 .msg-chart-wrap { margin-top: 12px; }
 .msg-chart { width: 100%; height: 240px; }
@@ -1182,6 +1227,7 @@ button, input, textarea, select { color: inherit; font: inherit; }
 }
 .msg-citations summary:hover, .msg-debug summary:hover { color: var(--text-secondary); }
 .cite-item { padding: 8px 10px; border-left: 2px solid #cbd5e1; margin: 6px 0 6px 4px; }
+.cite-idx { font-size: 11px; font-weight: 700; color: #7c3aed; margin-right: 6px; }
 .cite-fy { font-size: 11px; font-weight: 700; color: var(--accent); margin-right: 8px; }
 .cite-section { font-size: 12px; color: var(--text-secondary); }
 .cite-text { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }

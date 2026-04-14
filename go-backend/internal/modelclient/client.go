@@ -102,12 +102,14 @@ func (c *Client) Generate(ctx context.Context, question string, contextChunks []
 }
 
 // GenerateStream returns the raw HTTP response for SSE streaming.
-func (c *Client) GenerateStream(ctx context.Context, question string, contextChunks []map[string]interface{}, queryType string) (*http.Response, error) {
+func (c *Client) GenerateStream(ctx context.Context, question string, contextChunks []map[string]interface{}, queryType string, lang string, history []dto.HistoryMessage) (*http.Response, error) {
 	req := dto.GenerateRequest{
 		Question:  question,
 		Context:   contextChunks,
 		QueryType: queryType,
 		Stream:    true,
+		Lang:      lang,
+		History:   history,
 	}
 	data, err := json.Marshal(req)
 	if err != nil {

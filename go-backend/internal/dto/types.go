@@ -33,10 +33,11 @@ type AskResponse struct {
 }
 
 type Citation struct {
-	ChunkID      string `json:"chunk_id"`
-	FiscalYear   int    `json:"fiscal_year"`
-	SectionTitle string `json:"section_title"`
-	Snippet      string `json:"snippet"`
+	ChunkID       string `json:"chunk_id"`
+	FiscalYear    int    `json:"fiscal_year"`
+	SectionTitle  string `json:"section_title"`
+	Snippet       string `json:"snippet"`
+	EvidenceIndex int    `json:"evidence_index"`
 }
 
 type DebugInfo struct {
